@@ -41,10 +41,12 @@ class SharePoint_Connector(Connector):
                         break
                     elif site_response.status_code == 401:
                         self.logger.warning(f"401 Unauthorized. Refreshing access token. Attempt {retry}/{max_retries}")
-                        self.get_access_token()
+                        self.access_token = self.get_access_token()
+                        
                     else:
                         self.logger.error(f"Failed to connect: {site_response.status_code}: {json.dumps(site_response.json(),indent=4)}")
                         break
+                    
                     
                 except requests.exceptions.RequestException as e:
                     self.logger.error(f"Error getting site ID: {e}")
@@ -53,7 +55,6 @@ class SharePoint_Connector(Connector):
                 retry += 1
 
     def get_list_id(self, list_name: str, repeat=True) -> str:
-        #TODO Need to add a retry system for this to retry the token if expired.
         """
         Gets list id from cache if present, or gets site id via API call using cached information.
         If repeat is False, will exit as the program could not find the ID.
@@ -130,36 +131,37 @@ class SharePoint_Connector(Connector):
 
         retry = 1
         max_retries = 3
+        url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=fields"
 
-        while retry <= max_retries:
-            headers = {
-                'Authorization': f'Bearer {self.access_token}'
-            }
-            url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=fields"
-            while url:
-                try:
-                    response = requests.get(url, headers=headers)
+        while url and retry <= max_retries:
+            try:
+                headers = {
+                    'Authorization': f'Bearer {self.access_token}'
+                    }
+                url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=fields"
+                response = requests.get(url, headers=headers)
 
-                    if response.status_code == 200:
-                        raw_data = response.json()
-                        for item in raw_data['value']:
-                            if(fields:= item.get('fields')):
-                                sharepoint_id = fields.get('id')
-                                sharepoint_list_items[sharepoint_id] = fields
-                        self.logger.info(f"Retrieved {len(sharepoint_list_items)} from SharePoint.")
-                        url = raw_data.get('@odata.nextLink')
-                        if not url:
-                            self.logger.info(f"Retrieved {len(sharepoint_list_items)} items from SharePoint.")
-                            return sharepoint_list_items
-                                
-                    elif response.status_code == 401:
-                        self.logger.warning(f"401 Unauthorized. Refreshing access token. Attempt {retry}/{max_retries}")
-                        self.get_access_token()
-
-                except Exception as e:
-                    self.logger.error(f"Error getting Items from SharePoint.: {e}")
-            
-            retry += 1
+                if response.status_code == 200:
+                    raw_data = response.json()
+                    for item in raw_data['value']:
+                        if(fields:= item.get('fields')):
+                            sharepoint_id = fields.get('id')
+                            sharepoint_list_items[sharepoint_id] = fields
+                    self.logger.info(f"Retrieved {len(sharepoint_list_items)} from SharePoint.")
+                    url = raw_data.get('@odata.nextLink')
+                    if not url:
+                        self.logger.info(f"Retrieved {len(sharepoint_list_items)} items from SharePoint.")
+                        return sharepoint_list_items
+                            
+                elif response.status_code == 401:
+                    self.logger.warning(f"401 Unauthorized. Refreshing access token. Attempt {retry}/{max_retries}")
+                    self.access_token = self.get_access_token()
+                    retry += 1
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting Items from SharePoint.: {e}")
+                retry += 1
+        
 
     def batch_upload(self, batched_queue: deque):
         """
@@ -171,7 +173,7 @@ class SharePoint_Connector(Connector):
 
         self.logger.info("Uploading to SharePoint...")
         batch_url = "https://graph.microsoft.com/v1.0/$batch"
-        self.get_access_token()
+        self.access_token = self.get_access_token()
         headers = {
                         "Authorization": f"Bearer {self.access_token}",
                         "Content-Type": "application/json",
@@ -233,25 +235,3 @@ class SharePoint_Connector(Connector):
         item_list = self.get_item_ids(list_name)
 
         #From here, need to format/batch these items. then call batch_upload
-
-        
-
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

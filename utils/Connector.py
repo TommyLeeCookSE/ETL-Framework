@@ -31,8 +31,7 @@ class Connector(ABC):
         except FileNotFoundError as e:
             self.logger.warning(f"{self.token_file_path} not found, returning {[]}.")
             return {}
-    
-      
+     
     def is_access_token(self):
         """
         Check if an access token is present from the token loading.
@@ -65,7 +64,6 @@ class Connector(ABC):
         except Exception as e:
             self.logger.error(f"Error uploading tokens to json: {e}")
     
-
     def get_access_token(self):
         """
         Gets access token using cliend_id and client_secret.
@@ -96,3 +94,68 @@ class Connector(ABC):
             return self.access_token
         else:
             self.logger.error(f'Error getting token: {response.status_code}. | {json.dumps(response)}')
+
+    def check_response(self, info_dict: dict)-> dict:
+        """
+        Takes in a info_dict : 
+        If retries <= max_retries, proceed, otherwise return dict with status stop to let the program know to stop
+        Send the request, check status code, do checks, if sucessful code, return the object with status:stop
+        Retries up till the max before returning a stop.
+        Returns a response_dict which will let the program know to stop or continue
+
+        Args:
+            info_dict (dict): Dict with format {url: url, headers: headers, body: body, method: 'get/post'}
+        Returns:
+            response_dict (dict): Dict with format {status: 'success/fail', response: response_object}
+        """
+        retries = 0
+        max_retries = 3
+        fail_codes = [400, 401, 403, 408, 424, 500, 502, 503, 504]
+        success_codes = [200, 201, 204]
+
+        url = info_dict.get('url')
+        headers = info_dict.get('headers')
+        body = info_dict.get('body')
+        method = info_dict.get('method')
+        
+        
+        while retries <= max_retries:
+            if method == 'get':
+                response = requests.get(url, headers=headers)
+            elif method == 'post' and body:
+                response = requests.post(url, headers=headers, json=body)
+            elif method == 'post' and not body:
+                self.logger.warning(f"Missing body: {json.dumps(info_dict,indent=4)}")
+
+            if response:
+                response_json = response.json()
+                self.logger.debug(f"Response: {json.dumps(response_json,indent=4)}")
+                
+                fail_codes = [
+                    (int(item['status'])) 
+                    for item in response_json['responses']  
+                    if 'status' in item and int(item['status']) in fail_codes
+                    ]                    
+
+                if fail_codes and retries <= max_retries:
+                    self.logger.warning(f"{retries}/{max_retries} Items have failed codes. Need to try again for {len(fail_codes)} items")
+                    retries += 1
+                elif fail_codes and retries >= max_retries:
+                    self.logger.warning(f"{retries}/{max_retries} Limit reached, failed to upload {len(fail_codes)}")
+                    response_dict = {
+                        'status': 'fail',
+                        'response': response_json
+                    }
+                    return response_dict
+                else:
+                    self.logger.info(f"All items successfully uploaded.")
+                    response_dict = {
+                        'status': 'success',
+                        'response': response_json
+                    }
+                    return response_dict
+        
+        
+                    
+            
+                

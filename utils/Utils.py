@@ -44,31 +44,6 @@ def update_cache(cache_list: list, sharepoint_dict: dict, id_key: str) -> list:
     
     return cache_list
 
-def write_to_json(item, file_path: str):
-    """
-    Writes to json taking in the item and the filepath.
-
-    Args:
-        item (any): Any item to be written.
-        file_path (str): File Path where the item will be written.
-    """
-    with open(file_path,'w', encoding='utf-8') as json_file:
-        json.dump(item, json_file,indent=4)
-
-def read_from_json(file_path)-> dict:
-    """
-    Reads from json taking in the item and the filepath.
-
-    Args:
-        file_path (str): File Path where the item will be read.
-
-    Returns:
-        data (dict): Data read from json.
-    """
-    with open(file_path,'r',encoding='utf-8') as json_file:
-        data = json.load(json_file)
-    return data
-
 def generate_checksum(data: dict)-> Tuple[dict, str]:
     """
     Takes in a dict of dicts, iterates through each item in the dict and creates a checksum for each item in the inner dict.
@@ -329,4 +304,41 @@ def format_and_batch_for_upload(change_dict: dict, sharepoint_connector_o: objec
 
 
 
+def write_to_json(item, file_path: str):
+    """
+    Writes to json taking in the item and the filepath.
+
+    Args:
+        item (any): Any item to be written.
+        file_path (str): File Path where the item will be written.
+    """
+    with open(file_path,'w', encoding='utf-8') as json_file:
+        json.dump(item, json_file,indent=4)
+
+def read_from_json(file_path)-> dict:
+    """
+    Reads from json taking in the item and the filepath.
+
+    Args:
+        file_path (str): File Path where the item will be read.
+
+    Returns:
+        data (dict): Data read from json.
+    """
+    with open(file_path,'r',encoding='utf-8') as json_file:
+        data = json.load(json_file)
+    return data
+
+def trim_sharepoint_keys(sharepoint_dict: dict, logger)-> dict:
+    """
+    Takes in a dict of sharepoint items, trims it to the predefined standards, returns the trimmed dict.
+    
+    Args:
+        sharepoint_dict (dict): Dict containg raw values from SharePoint.
+
+    Returns:
+        trimmed_dict (dict): Dict with only the trimmed values.
+
+    """
+    pass
     
