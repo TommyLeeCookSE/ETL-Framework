@@ -73,7 +73,6 @@ class SharePoint_Connector(Connector):
         else:
             self.logger.info(f"Get List ID: {list_name} is not in cache.")
 
-        ############################################################################
         if not repeat :
             self.logger.warning(f"Get List ID: List ID not found for {list_name}, exiting.")
             return False
@@ -103,7 +102,7 @@ class SharePoint_Connector(Connector):
                 self.logger.error(f"Get Site Id: Failed to get list_id: {json.dumps(list_id_response)}")
             
             self.load_token_to_json()
-            
+
         except Exception as e:
             self.logger.error(f"Error getting SharePoint List ID: {e}")
             return False
@@ -112,7 +111,7 @@ class SharePoint_Connector(Connector):
 
         #Calls the program again as it will check for the list_id again.
         self.get_list_id(list_name,repeat=False)
-########################################################################################################################
+
     def get_item_ids(self, list_name:str) -> dict:
         """
         Takes in a list name, queries SharePoint for all items in the list and saves to a dict and writes to a json.
@@ -127,40 +126,39 @@ class SharePoint_Connector(Connector):
         site_id = self.get_site_id()
         list_id = self.get_list_id(list_name)
 
-        self.logger.info("Retrieving items from SharePoint...")
+        self.logger.info("Get Item Ids: Retrieving items from SharePoint...")
 
-        retry = 1
-        max_retries = 3
+        
+        
         url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=fields"
 
-        while url and retry <= max_retries:
+        while url:
             try:
-                headers = {
-                    'Authorization': f'Bearer {self.access_token}'
+                info_dict = {
+                    'url' : url,
+                    'headers' : {'Authorization': f'Bearer {self.access_token}'},
+                    'method': 'get'
                     }
-                url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=fields"
-                response = requests.get(url, headers=headers)
-
-                if response.status_code == 200:
-                    raw_data = response.json()
-                    for item in raw_data['value']:
-                        if(fields:= item.get('fields')):
+                
+                item_id_response = self.send_response(info_dict)
+                
+                if item_id_response['status'] == 'success':
+                    self.logger.info(f"Get Item IDs: Succeeded.")
+                    list_info = item_id_response['response']
+                    for item in list_info['value']:
+                        if (fields:= item.get('fields')):
                             sharepoint_id = fields.get('id')
                             sharepoint_list_items[sharepoint_id] = fields
-                    self.logger.info(f"Retrieved {len(sharepoint_list_items)} from SharePoint.")
-                    url = raw_data.get('@odata.nextLink')
+                    self.logger.info(f"Get Item Ids: Retrieved {len(sharepoint_list_items)} from SharePoint.")
+                    url = list_info.get('@odata.nextLink')
                     if not url:
-                        self.logger.info(f"Retrieved {len(sharepoint_list_items)} items from SharePoint.")
+                        self.logger.info(f"Get Item Ids: Retrieved {len(sharepoint_list_items)} items from SharePoint.")
                         return sharepoint_list_items
-                            
-                elif response.status_code == 401:
-                    self.logger.warning(f"401 Unauthorized. Refreshing access token. Attempt {retry}/{max_retries}")
-                    self.access_token = self.get_access_token()
-                    retry += 1
-                    
+                else:
+                    self.logger.warning(f"Get Item Ids: Did not correctly retrieve items: {item_id_response}")
+
             except Exception as e:
-                self.logger.error(f"Error getting Items from SharePoint.: {e}")
-                retry += 1
+                self.logger.error(f"Get Item Ids: Error getting Items from SharePoint.: {e}")
         
     def batch_upload(self, batched_queue: deque):
         """
