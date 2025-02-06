@@ -23,8 +23,8 @@ def main():
         #Connects to SharePoint, gets the SharePoint list, trim it of the unrequired keys/values
         sharepoint_connector_o = SharePoint_Connector(logger)
         
-        # sharepoint_items_dict = sharepoint_connector_o.get_item_ids('Asset_Pickup_History')
-        # write_to_json(sharepoint_items_dict,"inputs/raw_test_data.json")
+        sharepoint_items_dict = sharepoint_connector_o.get_item_ids('Asset_Pickup_History')
+        write_to_json(sharepoint_items_dict,"inputs/raw_test_data.json")
         #Cache it and check to previous cache   
         #Format for for service desk
         #Upload to service desk

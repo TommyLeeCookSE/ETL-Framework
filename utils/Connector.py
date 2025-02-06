@@ -10,6 +10,7 @@ class Connector(ABC):
         self.token_key = token_key
 
         self.token_file_path = r'misc\tokens.json'
+        self.access_token = ''
         self.token_info = self.load_token_info()
         self.is_access_token()
 
@@ -78,22 +79,34 @@ class Connector(ABC):
         tenant_id = self.token_info['tenant_id']
 
         token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-        payload = {
+        headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        data = {
             'grant_type': 'client_credentials',
             'client_id': client_id,
             'client_secret': client_secret,
             'scope': 'https://graph.microsoft.com/.default'
         }
-        
-        response = requests.post(token_url, data=payload)
+        info_dict = {
+            'url' : token_url,
+            'headers': headers,
+            'data': data,
+            'method': 'post',
+        }
 
-        if response.status_code == 200:
-            self.access_token = response.json()['access_token']
+        response_dict = self.check_response(info_dict)
+
+        response_json = response_dict['response']
+
+        if response_dict.get('status') == 'success':
+            self.logger.info("Succesfully retrieved access token.")
+            self.access_token = response_json['access_token']
             self.token_info['access_token'] = self.access_token
             self.load_token_to_json()
             return self.access_token
         else:
-            self.logger.error(f'Error getting token: {response.status_code}. | {json.dumps(response)}')
+            self.logger.error(f'Error getting token: {response_json}. | {json.dumps(response_json)}')
 
     def check_response(self, info_dict: dict)-> dict:
         """
@@ -104,7 +117,7 @@ class Connector(ABC):
         Returns a response_dict which will let the program know to stop or continue
 
         Args:
-            info_dict (dict): Dict with format {url: url, headers: headers, body: body, method: 'get/post'}
+            info_dict (dict): Dict with format {url: url, headers: headers, data/json_body: data/json_body, method: 'get/post'}
         Returns:
             response_dict (dict): Dict with format {status: 'success/fail', response: response_object}
         """
@@ -115,47 +128,72 @@ class Connector(ABC):
 
         url = info_dict.get('url')
         headers = info_dict.get('headers')
-        body = info_dict.get('body')
+        data = info_dict.get('data')
+        json_body = info_dict.get('json_body')
         method = info_dict.get('method')
-        
+
         
         while retries <= max_retries:
-            if method == 'get':
-                response = requests.get(url, headers=headers)
-            elif method == 'post' and body:
-                response = requests.post(url, headers=headers, json=body)
-            elif method == 'post' and not body:
-                self.logger.warning(f"Missing body: {json.dumps(info_dict,indent=4)}")
-
-            if response:
-                response_json = response.json()
-                self.logger.debug(f"Response: {json.dumps(response_json,indent=4)}")
+            try:
+                if method == 'get':
+                    response = requests.get(url, headers=headers)
+                elif method == 'post' and json_body:
+                    response = requests.post(url, headers=headers, json=json_body)
+                elif method == 'post' and data:
+                    response = requests.post(url, headers=headers, data=data)
                 
-                fail_codes = [
-                    (int(item['status'])) 
-                    for item in response_json['responses']  
-                    if 'status' in item and int(item['status']) in fail_codes
-                    ]                    
-
-                if fail_codes and retries <= max_retries:
-                    self.logger.warning(f"{retries}/{max_retries} Items have failed codes. Need to try again for {len(fail_codes)} items")
-                    retries += 1
-                elif fail_codes and retries >= max_retries:
-                    self.logger.warning(f"{retries}/{max_retries} Limit reached, failed to upload {len(fail_codes)}")
-                    response_dict = {
-                        'status': 'fail',
-                        'response': response_json
-                    }
-                    return response_dict
-                else:
-                    self.logger.info(f"All items successfully uploaded.")
-                    response_dict = {
-                        'status': 'success',
-                        'response': response_json
-                    }
-                    return response_dict
-        
-        
+                if response:
+                    response_json = response.json()
                     
+                    if response.status_code:
+                        status_code = response.status_code
+                        if status_code in fail_codes:
+                            failed_codes.append(status_code)
+                    else:
+                        failed_codes = [
+                            (int(item['status'])) 
+                            for item in response_json['responses']  
+                            if 'status' in item and int(item['status']) in fail_codes
+                            ]                    
+                    if status_code in success_codes: #Checks the status_code for the single item
+                        self.logger.info("Successfull response")
+                        response_dict = {
+                            'status': 'success',
+                            'response': response_json
+                        }
+                        break
+                    
+                    elif (failed_codes or status_code in fail_codes) and retries <= max_retries: #Checks if there was any failed codes 
+                        self.logger.warning(f"{retries}/{max_retries} Items have failed codes. Need to try again for {len(fail_codes)} items")
+                        retries += 1
+
+                    elif not failed_codes and status_code not in fail_codes: #Check if there are no failed fail_codes
+                        self.logger.info(f"All items successfully uploaded.")
+                        response_dict = {
+                            'status': 'success',
+                            'response': response_json
+                        }
+                        break
+                    else:
+                        self.logger.warning(f"{retries}/{max_retries} Limit reached, failed to upload {len(fail_codes)}")
+                        response_dict = {
+                            'status': 'fail',
+                            'response': response_json
+                        }
+                        break
+            except Exception as e:
+                self.logger.error(f"Error occured trying to get a response.")
+                response_dict = {
+                    'status': 'fail',
+                    'response': response_json
+                }
+                return response_dict 
+            
+        return response_dict
+
+        
+
+        
+        
             
                 
