@@ -17,8 +17,8 @@ def main():
         script_name = Path(__file__).stem
         logger = setup_logger(script_name)
 
-        logger.info(f"Current working directory: {os.getcwd()}")
-        logger.info(f"{script_name} executed, doing something...")
+        logger.info(f"Main: Current working directory: {os.getcwd()}")
+        logger.info(f"Main: {script_name} executed, doing something...")
 
         #Connects to SharePoint, gets the SharePoint list, trim it of the unrequired keys/values
         sharepoint_connector_o = SharePoint_Connector(logger)

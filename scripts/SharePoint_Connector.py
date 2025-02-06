@@ -16,44 +16,38 @@ class SharePoint_Connector(Connector):
         """
         if self.token_info['site_id']:
             site_id = self.token_info['site_id']
-            self.logger.info(f"Getting site id from cache: {site_id}")
+            self.logger.info(f"Get Site Id: Getting site id from cache: {site_id}")
             return site_id
         else:
-            retry = 1
-            max_retries = 3
-            self.logger.info(f"Site ID not in cache, retrieving via API...")
-            while retry <= max_retries:
-                try:
-                    site_domain = self.token_info['site_domain']
-                    site_path = self.token_info['site_path']
-                    headers = {
-                    "Authorization": f"Bearer {self.access_token}"
+            self.logger.info(f"Get Site Id: Site ID not in cache, retrieving via API...")
+
+            try:
+                site_domain = self.token_info['site_domain']
+                site_path = self.token_info['site_path']
+
+                info_dict = {
+                    'headers': {"Authorization": f"Bearer {self.access_token}"},
+                    'url' : f"https://graph.microsoft.com/v1.0/sites/{site_domain}:{site_path}",
+                    'method': 'get'
                     }
-                    api_url = f"https://graph.microsoft.com/v1.0/sites/{site_domain}:{site_path}"
-
-                    site_response = requests.get(api_url, headers=headers)
-                    if site_response.status_code == 200:
-                        site_info = site_response.json()
-                        site_id = site_info.get('id')
-                        self.token_info['site_id'] = site_id
-                        self.logger.info(f"Site ID: {site_id}")
-                        self.load_token_to_json()
-                        break
-                    elif site_response.status_code == 401:
-                        self.logger.warning(f"401 Unauthorized. Refreshing access token. Attempt {retry}/{max_retries}")
-                        self.access_token = self.get_access_token()
-                        
-                    else:
-                        self.logger.error(f"Failed to connect: {site_response.status_code}: {json.dumps(site_response.json(),indent=4)}")
-                        break
-                    
-                    
-                except requests.exceptions.RequestException as e:
-                    self.logger.error(f"Error getting site ID: {e}")
-                    self.logger.error(f"Stack trace: {traceback.format_exc()}")
                 
-                retry += 1
+                site_response = self.send_response(info_dict)
 
+                if site_response['status'] == 'success':
+                    self.logger.info("Get Site Id: Succeeded.")
+                    site_dict = site_response['response']
+                    site_id = site_dict.get('id')
+                    self.token_info['site_id'] = site_id
+                    self.logger.info(f"Get Site Id:Site ID: {site_id}")
+                    self.load_token_to_json()
+                else:
+                    self.logger.error(f"Get Site Id: Failed to connect: {json.dumps(site_response,indent=4)}")
+                
+                
+            except requests.exceptions.RequestException as e:
+                self.logger.error(f"Get Site Id:  Error getting site ID: {e}")
+                self.logger.error(f"Get Site Id:  Stack trace: {traceback.format_exc()}")
+                
     def get_list_id(self, list_name: str, repeat=True) -> str:
         """
         Gets list id from cache if present, or gets site id via API call using cached information.
@@ -67,52 +61,58 @@ class SharePoint_Connector(Connector):
                 list_id: List ID for list_name
                 False: When no list_id is found
         """
-        self.logger.info(f"Getting List ID for: {list_name}")
+        self.logger.info(f"Get List ID: Getting List ID for: {list_name}")
 
         if list_name in self.token_info.get('list_info',{}):
             list_id = self.token_info['list_info'][list_name].get('list_id')
             if list_id:
-                self.logger.info(f"List ID found in cache for {list_name}: {list_id}")
+                self.logger.info(f"Get List ID: List ID found in cache for {list_name}: {list_id}")
                 return list_id
             else:
-                self.logger.info(f"{list_name} is in cache, but List ID is missing.")
+                self.logger.info(f"Get List ID: {list_name} is in cache, but List ID is missing.")
         else:
-            self.logger.info(f"{list_name} is not in cache.")
+            self.logger.info(f"Get List ID: {list_name} is not in cache.")
 
-                
+        ############################################################################
         if not repeat :
-            self.logger.warning(f"List ID not found for {list_name}, exiting.")
+            self.logger.warning(f"Get List ID: List ID not found for {list_name}, exiting.")
             return False
         
-        self.logger.info(f"Retrieving new IDs...")
+        self.logger.info(f"Get List ID: Retrieving new IDs...")
         try: 
             site_id = self.get_site_id()
-            headers = {
-                "Authorization": f"Bearer {self.access_token}"
+            info_dict = {
+                'url': f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists",
+                'headers' : {"Authorization": f"Bearer {self.access_token}"},
+                'method': 'get'
             }
-            url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists"
 
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            raw_lists_info = response.json()
+            list_id_response = self.send_response(info_dict)
+            if list_id_response['status'] == 'success':
+                    self.logger.info("Get Site Id: Succeeded.")
+                    list_info = list_id_response['response']
+                    for list_item in list_info.get('value',[]):
+                        cached_list_name = list_item['name']
+                        cached_list_id  = list_item['id']
+                        
+                        if 'list_info' not in self.token_info:
+                            self.token_info['list_info'] = {}
 
-            for list_item in raw_lists_info.get('value',[]):
-                cached_list_name = list_item['name']
-                cached_list_id  = list_item['id']
-                
-                if 'list_info' not in self.token_info:
-                    self.token_info['list_info'] = {}
-
-                self.token_info['list_info'].setdefault(cached_list_name, {})['list_id'] = cached_list_id
+                        self.token_info['list_info'].setdefault(cached_list_name, {})['list_id'] = cached_list_id 
+            else:
+                self.logger.error(f"Get Site Id: Failed to get list_id: {json.dumps(list_id_response)}")
+            
             self.load_token_to_json()
+            
         except Exception as e:
             self.logger.error(f"Error getting SharePoint List ID: {e}")
             return False
 
         self.logger.info(f"List IDs have been retrieved. Checking again for {list_name}...")
 
+        #Calls the program again as it will check for the list_id again.
         self.get_list_id(list_name,repeat=False)
-
+########################################################################################################################
     def get_item_ids(self, list_name:str) -> dict:
         """
         Takes in a list name, queries SharePoint for all items in the list and saves to a dict and writes to a json.
@@ -162,7 +162,6 @@ class SharePoint_Connector(Connector):
                 self.logger.error(f"Error getting Items from SharePoint.: {e}")
                 retry += 1
         
-
     def batch_upload(self, batched_queue: deque):
         """
         Takes in a batched dequeue and uploads to SharePoint.
