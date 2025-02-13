@@ -112,12 +112,13 @@ class SharePoint_Connector(Connector):
         #Calls the program again as it will check for the list_id again.
         self.get_list_id(list_name,repeat=False)
 
-    def get_item_ids(self, list_name:str) -> dict:
+    def get_item_ids(self, list_name:str, params="") -> dict:
         """
         Takes in a list name, queries SharePoint for all items in the list and saves to a dict and writes to a json.
 
         Args:
             list_name (str): Name of the SharePoint list.
+            params (str): Option parameters to filter the list.
         
         Returns:
             sharepoint_list_items (dict): Dict containing SharePoint list contents.
@@ -130,8 +131,7 @@ class SharePoint_Connector(Connector):
 
         
         
-        url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=fields"
-
+        url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=fields{params}"
         while url:
             try:
                 info_dict = {
@@ -147,7 +147,7 @@ class SharePoint_Connector(Connector):
                     list_info = item_id_response['response']
                     for item in list_info['value']:
                         if (fields:= item.get('fields')):
-                            sharepoint_id = fields.get('id')
+                            sharepoint_id = item.get('id')
                             sharepoint_list_items[sharepoint_id] = fields
                     self.logger.info(f"Get Item Ids: Retrieved {len(sharepoint_list_items)} from SharePoint.")
                     url = list_info.get('@odata.nextLink')
@@ -156,6 +156,7 @@ class SharePoint_Connector(Connector):
                         return sharepoint_list_items
                 else:
                     self.logger.warning(f"Get Item Ids: Did not correctly retrieve items: {item_id_response}")
+                    break
 
             except Exception as e:
                 self.logger.error(f"Get Item Ids: Error getting Items from SharePoint.: {e}")
@@ -232,3 +233,140 @@ class SharePoint_Connector(Connector):
         item_list = self.get_item_ids(list_name)
 
         #From here, need to format/batch these items. then call batch_upload
+
+    def format_and_batch_for_upload_sharepoint(self,change_dict: dict, list_name: str) -> deque:
+        """
+        Takes in a dict, formats and batches them in groups of 20 for upload to SharePoint.
+
+        Args:
+            change_dict (dict): Dict holding the items that need to be updated in SharePoint.
+            sharepoint_connector_o (object): Used to get information from SharePoint.
+            list_name (str): The name of the SharePoint list (e.g., 'NewWorld_PO_Alert' or 'COT_Employees').
+            logger (object, optional): Logger object for logging. Defaults to None.
+        
+        Returns:
+            batch_queue (deque): Dequeue holding the formatted and batched items.
+        """
+        # Field mappings for each list
+        field_mappings = {
+            'NewWorld_PO_Alert': {
+                'fields': {
+                    "Title": "Title",
+                    "PO_Type": "PO_Type",
+                    "PO_Number": "PO_Number",
+                    "Vendor_Name": "Vendor_Name",
+                    "Description": "Description",
+                    "PO_Amount": "PO_Amount",
+                    "Expense": "Expense",
+                    "Balance": "Balance",
+                    "Expiration_Date": "Expiration_Date",
+                    "Expired": "Expired",
+                    "Less_Than_25_Remaining": "Less_Than_25_Remaining",
+                    "Less_Than_90_Days_Till_Expired": "Less_Than_90_Days_Till_Expired",
+                    "Less_Than_60_Days_Till_Expired": "Less_Than_60_Days_Till_Expired",
+                    "Less_Than_30_Days_Till_Expired": "Less_Than_30_Days_Till_Expired",
+                    "Contingency_Description": "Contingency_Description",
+                    "Contingency_Amount": "Contingency_Amount",
+                    "Contingency_Used": "Contingency_Used",
+                    "Contingency_Balance": "Contingency_Balance",
+                    "Unique_ID": "Unique_ID",
+                    "Last_Month_Update": "Last_Month_Update",
+                    "Last_Month_Updated_By": "Last_Month_Updated_By",
+                    "Last_Month_Update_Date": "Last_Month_Update_Date",
+                    "This_Month_Update": "This_Month_Update",
+                    "This_Month_Updated_By": "This_Month_Updated_By",
+                    "This_Month_Update_Date": "This_Month_Update_Date",
+                },
+                'unique_id_field': 'Unique_ID',
+            },
+            'COT_Employees': {
+                'fields': {
+                    "Title": "mail",
+                    "Display_Name": "displayName",
+                    "Department": "department",
+                    "Employee_Id": "employeeId",
+                    "Job_Title": "jobTitle",
+                    "Active": "employeeType",
+                    "Azure_Id": "id",
+                    "Manager": "manager",
+                    "Licenses@odata.type": "licenses_data_type",
+                    "Licenses": "licenses"
+                },
+                'unique_id_field': 'id',
+            },
+            'Asset_Pickup_History': {
+                'fields': {
+                    'Updated': 'Updated'
+                },
+                'unique_id_field': 'unique_id_field',
+            }
+
+        }
+
+        # Get the field mapping for the specified list
+        mapping = field_mappings.get(list_name)
+        if not mapping:
+            raise ValueError(f"Unsupported list name: {list_name}")
+
+        formatted_list = []
+        site_id = self.get_site_id()
+        list_id = self.get_list_id(list_name)
+
+        for item in change_dict.values():
+            sharepoint_id = item.get('sharepoint_id', '')
+            operation = item.get('operation', '')
+            unique_id = item.get(mapping['unique_id_field'], '')
+
+            # Build list_item_data based on the field mapping
+            list_item_data = {"fields": {}}
+            for field, source in mapping['fields'].items():
+                list_item_data['fields'][field] = item.get(source, 'MISSING')
+
+            # Build batch request based on operation
+            if operation == 'DELETE':
+                batch_request = {
+                    'id': unique_id,
+                    'method': 'DELETE',
+                    'url': f"/sites/{site_id}/lists/{list_id}/items/{sharepoint_id}",
+                }
+            elif operation == 'POST':
+                batch_request = {
+                    'id': unique_id,
+                    'method': 'POST',
+                    'url': f"/sites/{site_id}/lists/{list_id}/items",
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    "body": list_item_data
+                }
+            elif operation == 'PATCH':
+                batch_request = {
+                    'id': unique_id,
+                    'method': 'PATCH',
+                    'url': f"/sites/{site_id}/lists/{list_id}/items/{sharepoint_id}",
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    "body": list_item_data
+                }
+            else:
+                continue
+
+            formatted_list.append(batch_request)
+
+        # Batch the requests into groups of 20
+        batch_queue = deque()
+        temp_batch_list = []
+
+        for item in formatted_list:
+            temp_batch_list.append(item)
+            if len(temp_batch_list) == 20:
+                batch_queue.append({"requests": temp_batch_list})
+                temp_batch_list = []
+
+        if temp_batch_list:
+            batch_queue.append({"requests": temp_batch_list})
+
+        return batch_queue

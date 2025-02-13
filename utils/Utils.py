@@ -3,46 +3,32 @@ from pathlib import Path
 from typing import Tuple
 from collections import deque
 
-def merge_sharepoint_ids(change_dict: dict, cached_list: list, logger:object) -> dict:
+def cache_operation(current_dict, previous_cache_l, logger=None):
     """
-    Takes in a dict and downloads cached information.
-    Iterates over the dict and checks the cache for matching Azure keys. If matching gets the sharepoint_id to prepare for upload.
-
+    Takes in the current_dict and the previous_cache list.
+    Calls generate checksum which takes in the current_dict and returns (current_dict, total_checksum)
+    Change status is gathered from check_cache(previous_cache_l,current_cache_l)
+    If the the checksums match, return ['continue'] which will end the program in main
+    Otherwise, it check_changes(previous_cache_l,current_cache_l) will be called and return [operations,change_dict]  
+    
     Args:
-        change_dict (dict): Contains the users that have changes.
+        current_dict (dict): Current dict with no checksums.
+        previous_cache_l (list): Previous cachhe with format [{total_checksum: xxx}, {previous_cache}]
     
     Returns:
-        change_dict (dict): Updated change dict.
+        list : Either ['continue'] or [{operations}, {current_cache}]
     """
-    for key, value in change_dict.items():
-        logger.debug(f"Key: {json.dumps(key,indent=4)}")
-        logger.debug(f"Value: {json.dumps(value,indent=4)}")
-        value['sharepoint_id'] = cached_list[1][key].get('sharepoint_id',"")
+    current_cache_l = generate_checksum(current_dict)
     
-    return change_dict
+    current_cache_l = check_cache(previous_cache_l,current_cache_l)
 
-def update_cache(cache_list: list, sharepoint_dict: dict, id_key: str) -> list:
-    """
-    Takes in two dicts, cache_dict and sharepoint_dict and a id_key used to create the key for each dict.
-    Maps sharepoint_dict to the proper format to allow cache_dict to compare keys.
-    Takes the sharepoint_id from sharepoint_dict and saves it in cache.
-    Returns a single dict which will be the new cache.
+    change_status = current_cache_l[2].get('status')
+    if change_status == 'exit':
+        pass
+    elif change_status == 'continue':
+        current_cache_l = check_changes(previous_cache_l,current_cache_l, logger)
 
-    Args:
-        cache_dict (dict): Current cache.
-        sharepoint_dict (dict): Dict that is currently storing the sharepoint information.
-
-    Returns:
-        cache_dict (dict): Dict that will be the new cache.
-    """
-
-    mapped_dict = {item[id_key]: item for item in sharepoint_dict.values()}
-
-    for key, value in cache_list[1].items():
-        if key in mapped_dict:
-            value['sharepoint_id'] = mapped_dict[key]['id']
-    
-    return cache_list
+    return current_cache_l
 
 def generate_checksum(data: dict)-> Tuple[dict, str]:
     """
@@ -68,6 +54,29 @@ def generate_checksum(data: dict)-> Tuple[dict, str]:
     total_checksum = {'total_checksum': final_checksum}
     
     return [total_checksum, data]
+
+def update_cache(cache_list: list, sharepoint_dict: dict, id_key: str) -> list:
+    """
+    Takes in two dicts, cache_dict and sharepoint_dict and a id_key used to create the key for each dict.
+    Maps sharepoint_dict to the proper format to allow cache_dict to compare keys.
+    Takes the sharepoint_id from sharepoint_dict and saves it in cache.
+    Returns a single dict which will be the new cache.
+
+    Args:
+        cache_dict (dict): Current cache.
+        sharepoint_dict (dict): Dict that is currently storing the sharepoint information.
+
+    Returns:
+        cache_dict (dict): Dict that will be the new cache.
+    """
+
+    mapped_dict = {item[id_key]: item for item in sharepoint_dict.values()}
+
+    for key, value in cache_list[1].items():
+        if key in mapped_dict:
+            value['sharepoint_id'] = mapped_dict[key]['id']
+    
+    return cache_list
 
 def check_cache(previous_list: list, current_list: list) -> str:
     """
@@ -144,165 +153,23 @@ def check_changes(previous_list: list, current_list: list, logger) -> list:
 
     return current_list
 
-def cache_operation(current_dict, previous_cache_l, logger=None):
+def merge_sharepoint_ids(change_dict: dict, cached_list: list, logger:object) -> dict:
     """
-    Takes in the current_dict and the previous_cache list.
-    Calls generate checksum which takes in the current_dict and returns (current_dict, total_checksum)
-    Change status is gathered from check_cache(previous_cache_l,current_cache_l)
-    If the the checksums match, return ['continue'] which will end the program in main
-    Otherwise, it check_changes(previous_cache_l,current_cache_l) will be called and return [operations,change_dict]  
-    
-    Args:
-        current_dict (dict): Current dict with no checksums.
-        previous_cache_l (list): Previous cachhe with format [{total_checksum: xxx}, {previous_cache}]
-    
-    Returns:
-        list : Either ['continue'] or [{operations}, {current_cache}]
-    """
-    current_cache_l = generate_checksum(current_dict)
-    
-    current_cache_l = check_cache(previous_cache_l,current_cache_l)
-
-    change_status = current_cache_l[2].get('status')
-    if change_status == 'exit':
-        pass
-    elif change_status == 'continue':
-        current_cache_l = check_changes(previous_cache_l,current_cache_l, logger)
-
-    return current_cache_l
-
-
-def format_and_batch_for_upload(change_dict: dict, sharepoint_connector_o: object, list_name: str, logger=None) -> deque:
-    """
-    Takes in a dict, formats and batches them in groups of 20 for upload to SharePoint.
+    Takes in a dict and downloads cached information.
+    Iterates over the dict and checks the cache for matching Azure keys. If matching gets the sharepoint_id to prepare for upload.
 
     Args:
-        change_dict (dict): Dict holding the items that need to be updated in SharePoint.
-        sharepoint_connector_o (object): Used to get information from SharePoint.
-        list_name (str): The name of the SharePoint list (e.g., 'NewWorld_PO_Alert' or 'COT_Employees').
-        logger (object, optional): Logger object for logging. Defaults to None.
+        change_dict (dict): Contains the users that have changes.
     
     Returns:
-        batch_queue (deque): Dequeue holding the formatted and batched items.
+        change_dict (dict): Updated change dict.
     """
-    # Field mappings for each list
-    field_mappings = {
-        'NewWorld_PO_Alert': {
-            'fields': {
-                "Title": "Title",
-                "PO_Type": "PO_Type",
-                "PO_Number": "PO_Number",
-                "Vendor_Name": "Vendor_Name",
-                "Description": "Description",
-                "PO_Amount": "PO_Amount",
-                "Expense": "Expense",
-                "Balance": "Balance",
-                "Expiration_Date": "Expiration_Date",
-                "Expired": "Expired",
-                "Less_Than_25_Remaining": "Less_Than_25_Remaining",
-                "Less_Than_90_Days_Till_Expired": "Less_Than_90_Days_Till_Expired",
-                "Less_Than_60_Days_Till_Expired": "Less_Than_60_Days_Till_Expired",
-                "Less_Than_30_Days_Till_Expired": "Less_Than_30_Days_Till_Expired",
-                "Contingency_Description": "Contingency_Description",
-                "Contingency_Amount": "Contingency_Amount",
-                "Contingency_Used": "Contingency_Used",
-                "Contingency_Balance": "Contingency_Balance",
-                "Unique_ID": "Unique_ID",
-                "Last_Month_Update": "Last_Month_Update",
-                "Last_Month_Updated_By": "Last_Month_Updated_By",
-                "Last_Month_Update_Date": "Last_Month_Update_Date",
-                "This_Month_Update": "This_Month_Update",
-                "This_Month_Updated_By": "This_Month_Updated_By",
-                "This_Month_Update_Date": "This_Month_Update_Date",
-            },
-            'unique_id_field': 'Unique_ID',
-        },
-        'COT_Employees': {
-            'fields': {
-                "Title": "mail",
-                "Display_Name": "displayName",
-                "Department": "department",
-                "Employee_Id": "employeeId",
-                "Job_Title": "jobTitle",
-                "Active": "employeeType",
-                "Azure_Id": "id",
-                "Manager": "manager",
-                "Licenses@odata.type": "licenses_data_type",
-                "Licenses": "licenses"
-            },
-            'unique_id_field': 'id',
-        }
-    }
-
-    # Get the field mapping for the specified list
-    mapping = field_mappings.get(list_name)
-    if not mapping:
-        raise ValueError(f"Unsupported list name: {list_name}")
-
-    formatted_list = []
-    site_id = sharepoint_connector_o.get_site_id()
-    list_id = sharepoint_connector_o.get_list_id(list_name)
-
-    for item in change_dict.values():
-        sharepoint_id = item.get('sharepoint_id', '')
-        operation = item.get('operation', '')
-        unique_id = item.get(mapping['unique_id_field'], '')
-
-        # Build list_item_data based on the field mapping
-        list_item_data = {"fields": {}}
-        for field, source in mapping['fields'].items():
-            list_item_data['fields'][field] = item.get(source, '')
-
-        # Build batch request based on operation
-        if operation == 'DELETE':
-            batch_request = {
-                'id': unique_id,
-                'method': 'DELETE',
-                'url': f"/sites/{site_id}/lists/{list_id}/items/{sharepoint_id}",
-            }
-        elif operation == 'POST':
-            batch_request = {
-                'id': unique_id,
-                'method': 'POST',
-                'url': f"/sites/{site_id}/lists/{list_id}/items",
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                "body": list_item_data
-            }
-        elif operation == 'PATCH':
-            batch_request = {
-                'id': unique_id,
-                'method': 'PATCH',
-                'url': f"/sites/{site_id}/lists/{list_id}/items/{sharepoint_id}",
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                "body": list_item_data
-            }
-        else:
-            continue
-
-        formatted_list.append(batch_request)
-
-    # Batch the requests into groups of 20
-    batch_queue = deque()
-    temp_batch_list = []
-
-    for item in formatted_list:
-        temp_batch_list.append(item)
-        if len(temp_batch_list) == 20:
-            batch_queue.append({"requests": temp_batch_list})
-            temp_batch_list = []
-
-    if temp_batch_list:
-        batch_queue.append({"requests": temp_batch_list})
-
-    return batch_queue
-
-
+    for key, value in change_dict.items():
+        logger.debug(f"Key: {json.dumps(key,indent=4)}")
+        logger.debug(f"Value: {json.dumps(value,indent=4)}")
+        value['sharepoint_id'] = cached_list[1][key].get('sharepoint_id',"")
+    
+    return change_dict
 
 def write_to_json(item, file_path: str):
     """

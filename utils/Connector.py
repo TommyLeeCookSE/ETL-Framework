@@ -1,6 +1,7 @@
 #ETLs\utils\Connector.py
 from pathlib import Path
 from abc import ABC, abstractmethod
+from urllib.parse import urlencode
 import json, requests, os, sys
 
 class Connector(ABC):
@@ -25,10 +26,14 @@ class Connector(ABC):
         try:
             with open(self.token_file_path, 'r', encoding='utf-8') as token_json_file:
                 all_tokens_data = json.load(token_json_file)
-                token_data = all_tokens_data[self.token_key]
-                self.logger.info(f"Load Token Info: Loaded {self.token_key} Token Data.")
-                return token_data
-            
+                token_data = all_tokens_data.get(self.token_key)
+
+                if token_data:
+                    self.logger.info(f"Load Token Info: Loaded {self.token_key} Token Data.")
+                    return token_data
+                else:
+                    self.logger.warning(f"Load Token Info: {self.token_key} not found in token storage.")
+                    return {}
         except FileNotFoundError as e:
             self.logger.warning(f"Load Token Info: {self.token_file_path} not found, returning {[]}.")
             return {}
@@ -74,29 +79,47 @@ class Connector(ABC):
         """
         self.logger.info(f"Get Access Token: Access Token missing or Expired... Getting a new {self.token_key} Access Token..")
         
-        client_id = self.token_info['client_id']
-        client_secret = self.token_info['client_secret']
-        tenant_id = self.token_info['tenant_id']
+        match self.token_key:
+            case "sharepoint_tokens" | "azure_tokens":
+                token_url = f"https://login.microsoftonline.com/{self.token_info['tenant_id']}/oauth2/v2.0/token"
+                headers = {
+                'Content-Type': 'application/x-www-form-urlencoded'
+                }
+                data = {
+                    'grant_type': 'client_credentials',
+                    'client_id': self.token_info['client_id'],
+                    'client_secret': self.token_info['client_secret'],
+                    'scope': 'https://graph.microsoft.com/.default'
+                }
 
-        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-        headers = {
-        'Content-Type': 'application/x-www-form-urlencoded'
-        }
-        data = {
-            'grant_type': 'client_credentials',
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'scope': 'https://graph.microsoft.com/.default'
-        }
-        info_dict = {
-            'url' : token_url,
-            'headers': headers,
-            'data': data,
-            'method': 'post',
-        }
+                info_dict = {
+                    'url' : token_url,
+                    'headers': headers,
+                    'data': data,
+                    'method': 'post',
+                }
 
+            case "service_desk_tokens":
+                token_url = "https://accounts.zoho.com/oauth/v2/token"
+                headers = {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+                data = {
+                    "refresh_token": self.token_info['refresh_token'],
+                    "grant_type": "refresh_token",
+                    "client_id": self.token_info['client_id'],
+                    "client_secret": self.token_info['client_secret'],
+                    "redirect_uri": "https://www.zoho.com"
+                }
+
+                info_dict ={
+                    "url": token_url,
+                    "headers": headers,
+                    "data": data, 
+                    "method": "post",
+                }
+                
         response_dict = self.send_response(info_dict)
-
         response_json = response_dict['response']
 
         if response_dict.get('status') == 'success':
@@ -119,6 +142,8 @@ class Connector(ABC):
         Returns:
             checked_response_dict (dict): Dict formatted: {action: 'retry/continue', response: response_object}
         """
+        self.logger.info(f"Response Checker: Checking status code...")
+        self.logger.debug(f"Response Checker: {response}")
         fail_codes = [400, 401, 403, 408, 424, 500, 502, 503, 504]
         failed_codes = []
         success_codes = [200, 201, 204]
@@ -127,17 +152,20 @@ class Connector(ABC):
             'response': ''
         }
 
-        response_json = response.json()
-
         #Check if response is a single item, if so, will get the status code and check if there are any failed codes, otherwise, it will get the failed_codes from multiple items
         try:
-            if hasattr(response, 'status_code'):
+            if response.status_code == 401:
+                self.logger.warning(f"Response Checker: 401 detected.")
+                failed_codes.append(401)
+            elif hasattr(response, 'status_code'):
                 self.logger.info("Response Checker: Response has a single status_code")
                 status_code = response.status_code
                 if status_code in fail_codes:
                     failed_codes.append(status_code)  
+                response_json = response.json()
             else:
                 self.logger.info("Response Checker: Response has a multiple status_codes")
+                response_json = response.json()
                 failed_codes = [
                 (int(item['status'])) 
                 for item in response_json['responses']  
@@ -180,7 +208,7 @@ class Connector(ABC):
         Returns:
             response_dict (dict): Dict with format {status: 'success/fail', response: response_object}
         """
-        retries = 0
+        retries = 1
         max_retries = 3
 
         url = info_dict.get('url')
@@ -196,19 +224,17 @@ class Connector(ABC):
             try:
                 if method == 'get':
                     response = requests.get(url, headers=headers)
-                elif method == 'post' and json_body:
-                    response = requests.post(url, headers=headers, json=json_body)
-                elif method == 'post' and data:
-                    response = requests.post(url, headers=headers, data=data)
+                elif method == 'post':
+                    response = requests.post(url, headers=headers, json=json_body, data=data)
+                elif method == 'put':
+                    data= urlencode({"input_data": data}).encode()
+                    response = requests.put(url,headers=headers, data=data)
                 
-                if response:
-                    checked_response = self.response_checker(response)
+                checked_response = self.response_checker(response)
                     
                 if checked_response['action'] == 'retry':
                     self.logger.warning(f"Send Response: {retries}/{max_retries} 401 error detected, retrying.")
-                    self.logger.debug(f"Old access token: {self.access_token}")
                     self.get_access_token()
-                    self.logger.debug(f"New access token: {self.access_token}")
                     headers['Authorization'] = f'Bearer {self.access_token}'
                     retries += 1
 

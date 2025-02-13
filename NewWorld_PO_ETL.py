@@ -260,7 +260,7 @@ def main():
         sharepoint_connector_o = SharePoint_Connector(logger)
         
         logger.info("Formatting and batching for upload.")
-        batched_queue=format_and_batch_for_upload(current_data[1],sharepoint_connector_o,"NewWorld_PO_Alert")
+        batched_queue=sharepoint_connector_o.format_and_batch_for_upload_sharepoint(current_data[1],"NewWorld_PO_Alert")
         logger.info(f"Formatted and batched {len(batched_queue)} items for SharePoint")
         logger.info(f"Uploading {len(batched_queue)} batches to SharePoint.")
 
