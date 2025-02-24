@@ -281,7 +281,7 @@ class SharePoint_Connector(Connector):
             },
             'COT_Employees': {
                 'fields': {
-                    "Title": "mail",
+                    "Email": "mail",
                     "Display_Name": "displayName",
                     "Department": "department",
                     "Employee_Id": "employeeId",
@@ -299,7 +299,44 @@ class SharePoint_Connector(Connector):
                     'Updated': 'Updated'
                 },
                 'unique_id_field': 'unique_id_field',
-            }
+            },
+            'ServiceDesk_Assets': {
+                'fields': {
+                    "name": "name",
+                    "type": "type",
+                    "state": "state",
+                    "department": "department",
+                    "asset_description": "asset_description",
+                    "asset_assigned_user": "asset_assigned_user",
+                    "asset_assigned_user_dept": "asset_assigned_user_dept",
+                    "asset_assigned_user_email": "asset_assigned_user_email",
+                    "saas_id": "saas_id",
+                    "created_date": "created_date",
+                    "last_updated_date": "last_updated_date",
+                    "total_cost": "total_cost",
+                    "lifecycle": "lifecycle",
+                    "barcode": "barcode",
+                    "depreciation_salvage_value": "depreciation_salvage_value",
+                    "depreciation_useful_life": "depreciation_useful_life",
+                    "ip_address": "ip_address",
+                    "replaced_serial_number": "replaced_serial_number",
+                    "service_request": "service_request",
+                    "imei_number": "imei_number",
+                    "cellular_provider": "cellular_provider",
+                    "replacement_fund": "replacement_fund",
+                    "replacement_date": "replacement_date",
+                    "annual_replacement_amt": "annual_replacement_amt",
+                    "acquisition_date": "acquisition_date",
+                    "asset_vendor_name": "asset_vendor_name",
+                    "asset_purchase_cost": "asset_purchase_cost",
+                    "asset_product_type": "asset_product_type",
+                    "asset_category": "asset_category",
+                    "asset_manu": "asset_manu",
+                    "asset_serial_no": "asset_serial_no",
+                    "warranty_expiry_date": "warranty_expiry_date"
+                },
+                'unique_id_field': 'name',
+            },
 
         }
 

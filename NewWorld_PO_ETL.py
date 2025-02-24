@@ -267,21 +267,21 @@ def main():
         sharepoint_connector_o.batch_upload(batched_queue)
         logger.info("Uploaded items to SharePoint.")
 
-        operations = current_data[3].get('operations')
-        if operations['post'] > 0:
-            logger.info("Post detected, getting SharePoint ids and updating cache.")
+        # operations = current_data[3].get('operations')
+        # if operations['post'] > 0:
+        logger.info("Post detected, getting SharePoint ids and updating cache.")
 
-            sharepoint_list_items = sharepoint_connector_o.get_item_ids('NewWorld_PO_Alert')
+        sharepoint_list_items = sharepoint_connector_o.get_item_ids('NewWorld_PO_Alert')
 
-            logger.info(f"{len(sharepoint_list_items)} items retreieved, saving cache.")
-            
-            sharpoint_items_file_path = 'outputs/po_alert_sharepoint_items.json'
-            write_to_json(sharepoint_list_items,sharpoint_items_file_path)
-            logger.info(f"Items saved to {sharpoint_items_file_path}")
+        logger.info(f"{len(sharepoint_list_items)} items retreieved, saving cache.")
+        
+        sharpoint_items_file_path = 'outputs/po_alert_sharepoint_items.json'
+        write_to_json(sharepoint_list_items,sharpoint_items_file_path)
+        logger.info(f"Items saved to {sharpoint_items_file_path}")
 
-            logger.info("Updating Cache with SharePoint info")
-            full_cache = update_cache(current_data,sharepoint_list_items,'Unique_ID')
-            write_to_json(full_cache,cache_file_path)
+        logger.info("Updating Cache with SharePoint info")
+        full_cache = update_cache(current_data,sharepoint_list_items,'Unique_ID')
+        write_to_json(full_cache,cache_file_path)
         
         logger.info(f"ETL Completed successfully: Exit Code 0")
     except Exception as e:

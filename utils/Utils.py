@@ -122,31 +122,29 @@ def check_changes(previous_list: list, current_list: list, logger) -> list:
     operations = {'post':0,'patch':0,'delete':0,'none':0}
     previous_dict = previous_list[1]
     current_dict = current_list[1]
-    
-    for prev_key, prev_value in previous_dict.items():
-        if prev_key in current_dict:
-            if 'sharepoint_id' in prev_value:
-                        current_dict[prev_key]['sharepoint_id'] = prev_value['sharepoint_id']
-            else:
-                current_dict[prev_key]['sharepoint_id'] = ''
 
-            if prev_key in current_dict:
-                previous_checksum = prev_value['checksum']
-                current_checksum = current_dict[prev_key]['checksum']
-                if previous_checksum == current_checksum:
-                    current_dict[prev_key]['operation'] = 'NONE'
-                    operations['none'] += 1
-                else:
-                    current_dict[prev_key]['operation'] = 'PATCH'
-                    operations['patch'] += 1
+    for prev_key, prev_value in previous_dict.items():
+        if prev_key not in current_dict:
+            # Item was removed, mark as DELETE
+            prev_value['operation'] = 'DELETE'
+            prev_value['sharepoint_id'] = prev_value.get('sharepoint_id', '')
+            operations['delete'] += 1
+        else:
+            # Ensure sharepoint_id is retained
+            current_dict[prev_key]['sharepoint_id'] = prev_value.get('sharepoint_id', '')
+
+            # Check for checksum changes
+            if prev_value.get('checksum') == current_dict[prev_key].get('checksum'):
+                current_dict[prev_key]['operation'] = 'NONE'
+                operations['none'] += 1
             else:
-                current_dict[prev_key]['operation'] = 'DELETE'
-                current_dict[prev_key]['sharepoint_id'] = ''
-                operations['delete'] += 1
-    
+                current_dict[prev_key]['operation'] = 'PATCH'
+                operations['patch'] += 1
+
+    # Identify new items (POST)
     for curr_key, curr_value in current_dict.items():
         if curr_key not in previous_dict:
-            current_dict[curr_key]['operation'] = 'POST'
+            curr_value['operation'] = 'POST'
             operations['post'] += 1
 
     current_list.append({'operations':operations})

@@ -76,19 +76,21 @@ def main():
         sharepoint_connector_o.batch_upload(batched_queue)
 
         #If there was any POST, then we need to get the new sharepoint IDS
-        operations = current_data[3].get('operations')
-        if operations['post'] > 0:
-            logger.info(f"Updating cache with new info...")
-            #Gets item ids from SharePoint
-            sharepoint_list_items = sharepoint_connector_o.get_item_ids('COT_Employees')
+        # operations = current_data[3].get('operations')
+        # if operations['post'] > 0:
+        
+        logger.info(f"Updating cache with new info...")
+        #Gets item ids from SharePoint
+        sharepoint_list_items = sharepoint_connector_o.get_item_ids('COT_Employees')
 
-            sharepoint_items_file_path = project_root / 'outputs' / 'azure_user_info_sharepoint_items.json'
-            write_to_json(sharepoint_list_items,sharepoint_items_file_path)
-            
-            #Updates cache with the new SharePoint IDs
-            logger.info("Updating cache with SharePoint info...")
-            full_cache = update_cache(current_data, sharepoint_list_items,'Azure_Id')
-            write_to_json(full_cache,previous_cache_file_path)
+        sharepoint_items_file_path = project_root / 'outputs' / 'azure_user_info_sharepoint_items.json'
+        write_to_json(sharepoint_list_items,sharepoint_items_file_path)
+        
+        #Updates cache with the new SharePoint IDs
+        logger.info("Updating cache with SharePoint info...")
+        full_cache = update_cache(current_data, sharepoint_list_items,'Azure_Id')
+        write_to_json(full_cache,previous_cache_file_path)
+        
         
         logger.info("ETL Completed successfully: Exit Code 0")
         return 0

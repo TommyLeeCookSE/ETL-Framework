@@ -105,6 +105,7 @@ class ServiceDesk_Connector(Connector):
 
         Args:
             asset_id (int): asset_idr of asset to be looked up, used to get the specific item.
+            serial_number (str): Serial numbe of the asset.
             last_updated (int): Gets items last updated within the timeframe specified. Unix timestamp.
         Returns:
             asset_dict (dict): Returns a dict of dicts with the asset_id as the key.
@@ -120,10 +121,20 @@ class ServiceDesk_Connector(Connector):
                 self.logger.info(f"Get_Assets_Servicedesk: Getting asset_id by Serial Number: {serial_number}")
                 has_more_rows, asset_dict = self.get_list_of_assets(page, fields_required=['name'], search_criteria={"field": "name", "condition": "eq", "value": f'{serial_number}.cot.torrnet.com'})
                 self.logger.debug(f"Get_Assets: Asset_Dict: {asset_dict}")
-            if asset_id:
-                retreived_serial_number = None
+
+            elif asset_id:
+                self.logger.info(f"Get_Assets_Servicedesk: Getting asset by asset_id: {asset_id}")
+                asset_dict = self.get_asset_by_id(asset_id)
+
             elif last_updated:
-                pass
+                self.logger.info(f"Get_Assets_Servicedesk: Getting asset_id by last_Updated: {last_updated}")
+                while has_more_rows:
+                    search_criteria={"field":"last_updated_time", "condition": "gt", "value": f"{last_updated}"}
+                    has_more_rows, temp_asset_dict = self.get_list_of_assets(page, search_criteria=search_criteria)
+                    asset_dict.update(temp_asset_dict)
+                    page += 1
+                    self.logger.info(f"Get_Assets: Retrieved {len(asset_dict)} items.")
+                    self.logger.debug(f"Get_Assets: Has More Rows: {has_more_rows}.")
 
         elif not asset_id and not last_updated and not serial_number:
             self.logger.info("Get_Assets: No parameters specified, getting all assets.")
@@ -135,7 +146,7 @@ class ServiceDesk_Connector(Connector):
                 self.logger.info(f"Get_Assets: Retrieved {len(asset_dict)} items.")
 
 
-        self.logger.info(f"Get_Assets: Done retrieving items; Retrieved {len(asset_dict)} items.")
+        self.logger.info(f"Get_Assets: Done retrieving items")
         return asset_dict
     
     def get_list_of_assets(self, page_number:int, fields_required:list = None, search_criteria:dict = None) -> tuple:
@@ -148,7 +159,8 @@ class ServiceDesk_Connector(Connector):
             has_more_rows (bool): Bool for more values.
             asset_dict (list): Dict of assets/id pairs. 
         """
-        has_more_rows = False
+        has_more_rows = False  
+        asset_dict = {}
 
         self.logger.info(f"Get_List_Assets: Getting list of assets for page: {page_number}")
 
@@ -168,12 +180,11 @@ class ServiceDesk_Connector(Connector):
                     "row_count": self.max_row_count,
                     "sort_field": "id",
                     "sort_order": "asc",
-                    "search_criteria": search_criteria,
-                    "fields_required": fields_required
+                    **({"search_criteria": (search_criteria := search_criteria)} if search_criteria else {}),
+                    **({"fields_required": (fields_required := fields_required)} if fields_required else {})
                 }
             })        
         }
-
         encoded_params = urlencode(params)
         final_url = f"{api_url}?{encoded_params}"
 
@@ -186,12 +197,14 @@ class ServiceDesk_Connector(Connector):
 
         response_dict = self.send_response(info_dict)
         if (list_info := response_dict.get('response',{}).get('list_info')):
-            self.logger.info(f"Get_List_Assets: List info: {json.dumps(list_info,indent=4)}")
+            # self.logger.info(f"Get_List_Assets: List info: {json.dumps(list_info,indent=4)}")
+            has_more_rows = list_info.get('has_more_rows',False)
         else:
             self.logger.error(f"Get_List_Assets: No List Info Detected!")
             has_more_rows = False
 
         if (asset_list:= response_dict.get('response',{}).get('assets')):
+            # self.logger.info(f"Asset_List: {json.dumps(asset_list,indent=4)}")
             asset_dict = {
                 item.get('name'): {
                     'asset_id': item.get('id'), 
@@ -203,8 +216,43 @@ class ServiceDesk_Connector(Connector):
         
         return (has_more_rows, asset_dict)
 
-    def get_asset_by_id(self):
-        pass
+    def get_asset_by_id(self, asset_id: str) -> dict:
+        """
+        Takes in a str, request detailed information from it, returns a dict.
+        
+        Args:
+            asset_id (str): id of the asset
+
+        Returns:
+            detailed_asset_dict (dict): Dict containing details information on the asset.
+        """
+        self.logger.info(f"Get_Asset_by_ID: Getting list of assets for asset_id: {asset_id}")
+
+        api_url = f'{self.base_url}/api/v3/assets/{asset_id}'
+        self.logger.debug(f"Get_Asset_by_ID: Calling {api_url}")
+
+        headers = {
+        "Accept": "application/vnd.manageengine.sdp.v3+json",
+        "Authorization": f"Zoho-oauthtoken {self.access_token}",
+        "Content-Type": "application/json" 
+        }
+
+        info_dict = {
+            "url" : api_url,
+            "headers" : headers,
+            "method": "get"
+        }
+
+        response_dict = self.send_response(info_dict)
+
+        asset_info = response_dict.get('response',{}).get('asset',{})
+        
+        return asset_info
+
+        # self.logger.info(f"Get_Asset_by_ID: Response: {json.dumps(response_dict,indent=4)}")
+
+
+
 
     
         
