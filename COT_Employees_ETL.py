@@ -51,6 +51,11 @@ def main():
                 value['licenses'] = [fix_license(license) for license in licenses]
             else:
                 value['licenses'] = ['No_License'] 
+            
+            if value['accountEnabled']:
+                value['accountEnabled'] = str(value['accountEnabled'])
+            else:
+                value['accountEnabled'] = "False"
 
         logger.debug(json.dumps(azure_user_info_dict,indent=4))
         previous_cache_file_path = project_root / 'cache' / 'azure_user_info_cache.json'

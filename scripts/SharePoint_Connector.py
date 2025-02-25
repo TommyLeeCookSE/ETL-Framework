@@ -286,7 +286,7 @@ class SharePoint_Connector(Connector):
                     "Department": "department",
                     "Employee_Id": "employeeId",
                     "Job_Title": "jobTitle",
-                    "Active": "employeeType",
+                    "Active": "accountEnabled",
                     "Azure_Id": "id",
                     "Manager": "manager",
                     "Licenses@odata.type": "licenses_data_type",

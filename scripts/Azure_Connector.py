@@ -24,7 +24,7 @@ class Azure_Connector(Connector):
         Gets Azure User Info and saves to a dict with the Azure ID as they key.
         """
         self.logger.info("Getting Azure User Info...")
-        url = "https://graph.microsoft.com/v1.0/users?$select=displayName,mail,department,jobTitle,employeeId,id,employee_type&$expand=manager($select=displayName)"
+        url = "https://graph.microsoft.com/v1.0/users?$select=displayName,mail,department,jobTitle,employeeId,id,accountEnabled,assignedLicenses,createdDateTime,deletedDateTime&$expand=manager($select=displayName)"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json"
@@ -56,6 +56,8 @@ class Azure_Connector(Connector):
             all_users_dict[user['id']] = user
 
         self.logger.info("Retrieved Azure User Info.")
+
+        # self.logger.debug(json.dumps(all_users_dict,indent=4))
         return all_users_dict
 
     def get_user_license_info(self):
