@@ -13,21 +13,6 @@ from utils.Utils import *
 
 servicedesk_cache_file_path = r"cache/servicedesk_asset_cache.json"
 
-def read_servicedesk_cache()-> tuple:
-    """
-    Reads servicedesk_asset_cache.json, returns a tuple of the items:
-
-    Returns:
-        checksum (dict)
-        items (dict)
-        date (dict)
-    """
-    servicedesk_cache = read_from_json(servicedesk_cache_file_path)
-    checksum = servicedesk_cache[0]
-    items = servicedesk_cache[1]
-    dates = servicedesk_cache[4]
-
-    return checksum,items,dates, servicedesk_cache
 
 def clean_servicedesk_asset_details(raw_dict: dict) -> dict:
     """
@@ -94,7 +79,7 @@ def main():
         logger.info(f"Main: {script_name} executed, retrieving Service Desk Assets...")
 
         logger.info(f"Main: Retrieving cached items...")
-        checksum, items, dates, previous_servicedesk_cache_list = read_servicedesk_cache()
+        checksum, items, dates, previous_servicedesk_cache_list = read_servicedesk_cache(servicedesk_cache_file_path)
         logger.info(f"Main: Retrieved cached items:\nChecksum: {checksum}\nDates:{dates}")
         last_updated_iso = dates['current_time_epoch_ms']
 

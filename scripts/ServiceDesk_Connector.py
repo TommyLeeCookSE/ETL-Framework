@@ -251,6 +251,170 @@ class ServiceDesk_Connector(Connector):
 
         # self.logger.info(f"Get_Asset_by_ID: Response: {json.dumps(response_dict,indent=4)}")
 
+    def get_list_of_item_ids(self, module_name: str, page_number: int, fields_required:list = None, search_criteria:dict = None)-> dict:
+        """
+        Retrieves a list of item_ids for the module name passed in. Retrieves only one page at a time.
+
+        Args:
+            module_name (str): Name of the module being retrieved.
+            page_number (int): Current page being retrieved.
+        Returns:
+            response_dict (dict): List of item ids and other pertinent info.
+        """
+
+        self.logger.info(f"Get_List_Item_Ids: Getting list for module: ({module_name.upper()}), page: {page_number}")
+
+        api_url = f'{self.base_url}/api/v3/{module_name}'
+        self.logger.debug(f"Get_List_Item_Ids: Calling {api_url}")
+        
+        headers = {
+        "Accept": "application/vnd.manageengine.sdp.v3+json",
+        "Authorization": f"Zoho-oauthtoken {self.access_token}",
+        "Content-Type": "application/json" 
+        }
+
+        params = {
+            "input_data": json.dumps({
+                "list_info":{
+                    "page": page_number, 
+                    "row_count": self.max_row_count,
+                    "sort_field": "id",
+                    "sort_order": "asc",
+                    **({"search_criteria": (search_criteria := search_criteria)} if search_criteria else {}),
+                    **({"fields_required": (fields_required := fields_required)} if fields_required else {})
+                }
+            })        
+        }
+
+        encoded_params = urlencode(params)
+        final_url = f"{api_url}?{encoded_params}"
+
+        info_dict = {
+            "url" : final_url,
+            "headers" : headers,
+            "params": params,
+            "method": "get"
+        }
+
+        response_dict = self.send_response(info_dict)
+        
+        return response_dict if response_dict else {}
+
+    def get_list_of_task_ids(self, module_name: str, module_id_dict: dict, fields_required:list = None, search_criteria:dict = None)-> dict:
+        """
+        Retrieves the task_ids from each module in the module_id_dict, saving it back in the dict and returning it.
+
+        Args:
+            module_name (str): Name of module that is currently be retrieved.
+            module_id_dict (dict): Dict containing the module_ids.
+            fields_required (list): Limits what fields are returned.
+            search_criteria (dict): Ensures only certain records are returned.
+        Returns:
+            module_id_dict (dict): Dict that not contains the task_ids
+        """
+
+        self.logger.info(f"Get_List_Task_Ids: Getting list for module: ({module_name.upper()})")
+        module_dict = module_id_dict.get(module_name) 
+        for item in module_id_dict.values():
+            module_id = item.get('module_id')
+            api_url = f'{self.base_url}/api/v3/{module_name}/{module_id}/tasks'
+            self.logger.debug(f"Get_List_Task_Ids: Calling {api_url}")
+
+            headers = {
+            "Accept": "application/vnd.manageengine.sdp.v3+json",
+            "Authorization": f"Zoho-oauthtoken {self.access_token}",
+            "Content-Type": "application/json" 
+            }
+
+            params = {
+                "input_data": json.dumps({
+                    "list_info":{
+                        "row_count": self.max_row_count,
+                        "sort_field": "id",
+                        "sort_order": "asc",
+                        **({"search_criteria": (search_criteria := search_criteria)} if search_criteria else {}),
+                        **({"fields_required": (fields_required := fields_required)} if fields_required else {})
+                    }
+                })        
+            }
+
+            encoded_params = urlencode(params)
+            final_url = f"{api_url}?{encoded_params}"
+
+            info_dict = {
+                "url" : final_url,
+                "headers" : headers,
+                "params": params,
+                "method": "get"
+            }
+
+            response_dict = self.send_response(info_dict)
+
+            if response_dict:
+                self.logger.info(json.dumps(response_dict,indent=4))
+
+    def get_worklogs_from_servicedesk(self, module_name: str, max_pages:int, fields_required:list=None, search_criteria:dict=None) -> dict:
+        """
+        Retrieves worklogs from ServiceDesk. Takes a module name and iterates over module_ids (up to the specified amount of max pages)
+        For each list of module ids retrieved:
+        Get task ids
+        Get worklog details
+        Get worklog details for tasks
+        Return once the max_pages has been reached.
+
+        Args:
+            module_name str(): Name of module that is currently be retrieved.
+            max_pages (int): Max number of pages to retrieve each page has approx 100 records.
+            fields_required (list): Limits what fields are returned.
+            search_criteria (dict): Ensures only certain records are returned.
+        Returns:
+            worklog_dict (dict): Contains worklogs in format:
+            {
+                module_id:{
+                    task_id: {
+                        worklog_details: {}
+                    }
+                    worklog_details: {}
+                }
+            }
+        """
+        worklog_dict = {}
+        current_page = 1
+        has_more_rows = True
+
+        while current_page <= max_pages and has_more_rows:
+            response = self.get_list_of_item_ids(module_name,current_page)
+            if response:
+                module_id_list = response.get('response',{}).get(module_name,{})
+                has_more_rows = response.get('response',{}).get('list_info',{}).get('has_more_rows',False)
+                worklog_dict = {item['id'] : 
+                                {
+                                    "module_id": item['id'],
+                                    "tasks" : {
+                                        "task_ids": [],
+                                        "worklog_details": {
+                                            #task_id : {info}
+                                        }
+                                    },
+                                    "worklog_details": {
+                                        #module_id: {info}
+                                    }
+
+                                } 
+                            for item in module_id_list
+                            }
+                self.logger.info(f"Get_Worklogs: Retreived {len(worklog_dict)} items.")
+            else:
+                self.logger.error(f"Get_Worklogs encountered an error retreiving a response.")
+                has_more_rows = False
+            
+            current_page += 1
+        
+        self.get_list_of_task_ids(module_name, worklog_dict)
+        
+        return worklog_dict
+
+
 
 
 

@@ -207,3 +207,19 @@ def trim_sharepoint_keys(sharepoint_dict: dict, logger)-> dict:
     """
     pass
     
+
+def read_servicedesk_cache(servicedesk_cache_file_path)-> tuple:
+    """
+    Reads servicedesk_asset_cache.json, returns a tuple of the items:
+
+    Returns:
+        checksum (dict)
+        items (dict)
+        date (dict)
+    """
+    servicedesk_cache = read_from_json(servicedesk_cache_file_path)
+    checksum = servicedesk_cache[0]
+    items = servicedesk_cache[1]
+    dates = servicedesk_cache[4]
+
+    return checksum,items,dates,servicedesk_cache
