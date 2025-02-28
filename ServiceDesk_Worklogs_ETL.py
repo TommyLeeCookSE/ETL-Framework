@@ -28,22 +28,52 @@ def determine_iteration_type(dates_dict:dict) -> str:
 
     return "full_sync" if iteration_checker == 0 else "partial_sync"
 
-def get_module_ids()-> dict:
+def clean_and_format_data(worklogs_dict:dict, module_key:str) -> dict:
     """
-    Loops through each module getting all module_ids, returns a dict for the module
+    Takes in a single module_dict and module_key and convert ms to minutes, convert ms to hours, convert the start_time to mm/dd/yyyy format
+
+    Args:
+        worlogs_dict (dict): Dict that contains each individual ticket dict that contains all worklogs
+        module_key (str): Used to determine which module currently in.
+    Returns:
+        cleaned_data_dict (dict): Dict with all values cleaned.
+
     """
+    #for every module in module_dict.values()
+    for ticket in worklogs_dict.values():
+        worklog_details = ticket.get('worklog_details')
+        module_id = ticket.get('module_id')
+        is_incident = ticket.get('is_incident')
+        for worklog in worklog_details.values():
 
+            time_spent_ms = int(worklog.get('time_spent_ms',0))
+            time_spent_minutes = time_spent_ms / 1000 / 60
+            time_spent_hours = time_spent_minutes / 60
 
+            start_time = worklog.get('start_time')
+            if start_time:
+                date_obj = datetime.strptime(start_time, "%b %d, %Y %I:%M %p")
+                formatted_start_time = date_obj.strftime("%m/%d/%Y")
+            else:
+                formatted_start_time = "N/A"
+            
+            
+            module_url = f"https://servicedesk.torranceca.gov/app/itdesk/ui/{module_key}/{module_id}/details" if module_key != "changes" else f"https://servicedesk.torranceca.gov/app/itdesk/ChangeDetails.cc?CHANGEID={module_id}&selectTab=close&subTab=details"
+            module_key = "incident" if is_incident == True else module_key
+
+            worklog['time_spent_minutes'] = time_spent_minutes
+            worklog['time_spent_hours'] = time_spent_hours
+            worklog['formatted_start_time'] = formatted_start_time
+            worklog['module'] = module_key
+            worklog['module_url'] = module_url
+
+    return worklogs_dict
+
+def combine_data(worklogs_dict:dict)-> dict:
+    """"
+    """
 
 def main():
-    """
-
-    3. Begin looping through module list and begin calling modules->task->worklogs
-    4. Save each module to a dict and save the raw data to a dict to go into outputs
-    5. When done begin running the cache comparison
-    6. Format and upload to sharepoint
-    7. Update each dict and save to the cache.
-    """
     try:
         script_name = Path(__file__).stem
         logger = setup_logger(script_name)
@@ -59,46 +89,30 @@ def main():
 
         servicedesk_connector_o = ServiceDesk_Connector(logger)
         
-        # module_list = ['requests','projects','problems','changes','releases']
-        module_list = ['requests']
+        module_list = ['requests','projects','problems','changes','releases']
+        # module_list = ['requests','problems','releases','changes']
         worklogs_dict = {module_name : {} for module_name in module_list}
 
         for module_key, value in worklogs_dict.items():
             worklogs_dict[module_key] = servicedesk_connector_o.get_worklogs_from_servicedesk(module_key,1)
-            logger.info(f"Main: {json.dumps(worklogs_dict,indent=4)}")
-        """
-        TODO: Iterate over worklog dicts, begin fill it with module_id -> task_id -> worklog details
-        Format will be 
-        module_id: {
-            task_id: {
-                worklog_details: {
-                created_date: str,
-                minutes: int,
-                tech_name: str,
-                tech_email, str
-                }
-            }
-            worklog_details: {
-                created_date: str,
-                minutes: int,
-                tech_name: str,
-                tech_email, str}
-        }
-        Iterate over each module, create a new dict for each module_id, investigate each module_id fully before moving onto the next
-        Return a completed module ID to be added to the dict
+            logger.info(f"Main: Completed retrieving worklogs for {module_key}")
+        logger.info(f"Main: {json.dumps(worklogs_dict,indent=4)}")
 
-        Call get lists of module, utilize a max_page for partial and no max for fulls,
-        Retrieve the list of module and get each item by id
-        Then with the id tsaved in the dict, get the worklogs for the task ids and the module_id, when done, return the single dict
+        for module_key, module_values in worklogs_dict.items():
+            worklogs_dict[module_key] = clean_and_format_data(module_values, module_key)
+            logger.info(f"Main: Completed cleaning data for {module_key}")
+        logger.info("Main: Completed cleaning all modules.")
+        logger.debug(json.dumps(worklogs_dict,indent=4))
 
         """
-        """
-        TODO: Rework get_list_of_assets to get_list_of_items and get_asset_by_id to get_items_by_id
-        These will be the generic fetch functions, get_assets_from_sd will be specific for assets
-        Can make a get_worklogs_from_servicedesk  that will get worklogs from module-task and have it use the generic calls
+        TODO: For each ticket need to start combining them,cache, and then upload
+        Combine tickets:
+            To combine tickets, look at each worklog for each ticket, create a new worklog that is module_id_tech_email (unique id), then add the details you need but sum the time and concat the worklog ids. For date, use the latest one.
+            When done, each ticket will have a worklog for each tech that is the summed total.
+        Cache
+        Upload
         
         """
-
 
     except Exception as e:
         logger.error(f"Main: Error occured in main: {e}: Exit Code 1")

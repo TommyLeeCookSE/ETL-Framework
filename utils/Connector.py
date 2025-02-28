@@ -161,6 +161,7 @@ class Connector(ABC):
                 self.logger.info("Response Checker: Response has a single status_code")
                 status_code = response.status_code
                 if status_code in fail_codes:
+                    self.logger.info(f"Response Checker: {status_code} in fail codes.")
                     failed_codes.append(status_code)  
                 response_json = response.json()
             else:
@@ -188,11 +189,16 @@ class Connector(ABC):
                 self.access_token = self.get_access_token()
                 checked_response['action'] = 'retry'
                 return checked_response
-            
+            elif 400 in failed_codes or 404 in failed_codes:
+                self.logger.warning(f"Response Checker: {failed_codes} detected, exiting.")
+                checked_response['action'] = 'end'
+                checked_response['response'] = response_json
+                return checked_response
             else:
                 self.logger.warning(f"Response Checker: Error codes detected but resolvable: {failed_codes}")
                 checked_response['action'] = 'continue'
                 checked_response['response'] = response_json
+                self.logger.debug(f"Response Checker: {checked_response}")
                 return checked_response
 
     def send_response(self, info_dict: dict)-> dict:
@@ -243,6 +249,12 @@ class Connector(ABC):
                     response_dict['status'] = 'success'
                     response_dict['response'] = checked_response['response']
                     self.logger.debug(f"Send Response: response_dict created.")
+                    break
+
+                elif checked_response['action'] == 'end':
+                    self.logger.error(f"Send Response:  {checked_response} error detected, exiting.")
+                    response_dict['status'] = 'fail'
+                    response_dict['response'] = checked_response
                     break
 
             except Exception as e:

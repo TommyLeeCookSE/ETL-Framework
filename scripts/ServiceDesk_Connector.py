@@ -8,6 +8,54 @@ class ServiceDesk_Connector(Connector):
 
         self.base_url = "https://servicedesk.torranceca.gov"
         self.max_row_count = 100
+
+        self.headers = {
+            "Accept": "application/vnd.manageengine.sdp.v3+json",
+            "Authorization": f"Zoho-oauthtoken {self.access_token}",
+            "Content-Type": "application/x-www-form-urlencoded" 
+        }
+
+    def build_servicedesk_asset_data(self, change_item:dict)->str:
+        """
+        Takes in a dict that holds the item that needs to be formatted for ServiceDesk.
+        Item will be formattedb based off of user type then converted to a f-string and returned.
+
+        Args:
+            change_item (dict): Dict containing parameters to upload.
+        Returns:
+            formatted_item (str): Formatted f-string of the change_item.
+        """
+
+        asset_data = {
+            "asset": {
+                "serial_number": change_item.get("Serial_Number", ""),
+                "barcode": int(change_item.get("Barcode", "0")) if change_item.get("Barcode") else "",
+                "udf_fields": {
+                    "udf_char8": int(change_item.get("Request_Number", "0")) if change_item.get("Request_Number") else "",
+                    "udf_char7": change_item.get("Replaced_Serial_Number", "")
+                },
+                "state": {
+                    "name": "In Use"
+                }
+            }
+        }
+
+        user_type = change_item.get('user_type',"")
+
+        if user_type == 'User':
+            asset_data['asset']['user'] = {
+                'name': change_item.get('User_Name',''),
+                'email_id': change_item.get('User','')
+            }
+        elif user_type == 'Shared Device':
+            asset_data['asset']['department']['name'] = change_item.get('User_Department','')
+            asset_data['asset']['location'] = change_item.get('User_Location')
+
+        formatted_item = json.dumps(asset_data,indent=4)
+        self.logger.info(f"Build_Asset_Data: Asset Data: {json.dumps(asset_data,indent=4)}")
+        self.logger.info(f"Build_Asset_Data: F-string Asset Data: {formatted_item}")
+
+        return formatted_item
         
 
     def format_and_batch_for_upload_servicedesk(self,change_dict: dict, module_name: str) -> deque:
@@ -25,24 +73,30 @@ class ServiceDesk_Connector(Connector):
         formatted_deque = deque()
         for key,item in change_dict.items():
             if module_name == "asset_upload":
-                input_data = f'''{{
-                                    "asset" : {{
-                                        "serial_number": "{item.get('Serial_Number','')}",
-                                        "barcode": "{int(item.get('Barcode',''))}",
-                                        "udf_fields":{{
-                                            "udf_char8": "{int(item.get('Request_Number',''))}",
-                                            "udf_char7": "{item.get('Replaced_Serial_Number')}"
-                                        }},
-                                        "user":{{
-                                            "name": "{item.get('User_Name','')}",
-                                            "email_id": "{item.get('User','')}"
-                                        }},
-                                        "state":{{
-                                            "name": "In Use",
-                                        }}
-                                    }}
+                # input_data = f'''{{
+                #                     "asset" : {{
+                #                         "serial_number": "{item.get('Serial_Number','')}",
+                #                         "barcode": "{int(item.get('Barcode',''))}",
+                #                         "udf_fields":{{
+                #                             "udf_char8": "{int(item.get('Request_Number',''))}",
+                #                             "udf_char7": "{item.get('Replaced_Serial_Number')}"
+                #                         }},
+                #                         "department":{{
+                #                             "name": "{item.get('User_Department','')}"
+                #                         }},
+                #                         "location":{item.get('User_Location','')},
+                #                         "user":{{
+                #                             "name": "{item.get('User_Name','')}",
+                #                             "email_id": "{item.get('User','')}"
+                #                         }},
+                #                         "state":{{
+                #                             "name": "In Use",
+                #                         }}
+                #                     }}
 
-                }}'''
+                # }}'''
+
+                input_data = self.build_servicedesk_asset_data(item)
 
                 input_dict = {
                     'serial_number': item.get('Serial_Number',''),
@@ -80,14 +134,10 @@ class ServiceDesk_Connector(Connector):
             sharepoint_id = upload_item.get('sharepoint_id')
             
             api_url = f'{self.base_url}/api/v3/assets/{asset_id}'
-            headers = {
-                "Accept": "application/vnd.manageengine.sdp.v3+json",
-                "Authorization": f"Zoho-oauthtoken {self.access_token}",
-                "Content-Type": "application/x-www-form-urlencoded" 
-            }
+
             info_dict = {
                 "url" : api_url,
-                "headers" : headers,
+                "headers" : self.headers,
                 "data": input_data,
                 "method": "put"
             }
@@ -166,12 +216,6 @@ class ServiceDesk_Connector(Connector):
 
         api_url = f'{self.base_url}/api/v3/assets'
         self.logger.debug(f"Get_List_Assets: Calling {api_url}")
-
-        headers = {
-        "Accept": "application/vnd.manageengine.sdp.v3+json",
-        "Authorization": f"Zoho-oauthtoken {self.access_token}",
-        "Content-Type": "application/json" 
-        }
         
         params = {
             "input_data": json.dumps({
@@ -190,8 +234,7 @@ class ServiceDesk_Connector(Connector):
 
         info_dict = {
             "url" : final_url,
-            "headers" : headers,
-            "params": params,
+            "headers" : self.headers,
             "method": "get"
         }
 
@@ -231,15 +274,9 @@ class ServiceDesk_Connector(Connector):
         api_url = f'{self.base_url}/api/v3/assets/{asset_id}'
         self.logger.debug(f"Get_Asset_by_ID: Calling {api_url}")
 
-        headers = {
-        "Accept": "application/vnd.manageengine.sdp.v3+json",
-        "Authorization": f"Zoho-oauthtoken {self.access_token}",
-        "Content-Type": "application/json" 
-        }
-
         info_dict = {
             "url" : api_url,
-            "headers" : headers,
+            "headers" : self.headers,
             "method": "get"
         }
 
@@ -266,12 +303,6 @@ class ServiceDesk_Connector(Connector):
 
         api_url = f'{self.base_url}/api/v3/{module_name}'
         self.logger.debug(f"Get_List_Item_Ids: Calling {api_url}")
-        
-        headers = {
-        "Accept": "application/vnd.manageengine.sdp.v3+json",
-        "Authorization": f"Zoho-oauthtoken {self.access_token}",
-        "Content-Type": "application/json" 
-        }
 
         params = {
             "input_data": json.dumps({
@@ -291,40 +322,32 @@ class ServiceDesk_Connector(Connector):
 
         info_dict = {
             "url" : final_url,
-            "headers" : headers,
-            "params": params,
+            "headers" : self.headers,
             "method": "get"
         }
 
         response_dict = self.send_response(info_dict)
         
         return response_dict if response_dict else {}
-
-    def get_list_of_task_ids(self, module_name: str, module_id_dict: dict, fields_required:list = None, search_criteria:dict = None)-> dict:
+    
+    def get_worklogs(self, module_name: str, worklog_dict: dict, fields_required:list = None, search_criteria:dict = None)-> dict:
         """
-        Retrieves the task_ids from each module in the module_id_dict, saving it back in the dict and returning it.
+        Retrieves worklogs for the requested modules_id and all of its subtasks.
 
         Args:
             module_name (str): Name of module that is currently be retrieved.
-            module_id_dict (dict): Dict containing the module_ids.
+            worklog_dict (dict): Dict containing the ids of modules and tasks.
             fields_required (list): Limits what fields are returned.
             search_criteria (dict): Ensures only certain records are returned.
         Returns:
-            module_id_dict (dict): Dict that not contains the task_ids
+            id_dict (dict): Dict that contains the worklogs
         """
+        response_list = []
 
-        self.logger.info(f"Get_List_Task_Ids: Getting list for module: ({module_name.upper()})")
-        module_dict = module_id_dict.get(module_name) 
-        for item in module_id_dict.values():
-            module_id = item.get('module_id')
-            api_url = f'{self.base_url}/api/v3/{module_name}/{module_id}/tasks'
-            self.logger.debug(f"Get_List_Task_Ids: Calling {api_url}")
-
-            headers = {
-            "Accept": "application/vnd.manageengine.sdp.v3+json",
-            "Authorization": f"Zoho-oauthtoken {self.access_token}",
-            "Content-Type": "application/json" 
-            }
+        total_items = len(worklog_dict)
+        for counter, values in enumerate(worklog_dict.values(), start=1):
+            module_id = values.get('module_id')
+            self.logger.info(f"Get_Worklogs: Getting worklogs ({counter}/{total_items}) for module: ({module_name.upper()}) | Ticket: {module_id}")
 
             params = {
                 "input_data": json.dumps({
@@ -338,21 +361,61 @@ class ServiceDesk_Connector(Connector):
                 })        
             }
 
-            encoded_params = urlencode(params)
+            if module_name != "projects":
+                api_url = f'{self.base_url}/api/v3/{module_name}/{module_id}/worklogs'
+                self.logger.debug(f"Get_Worklogs: Calling {api_url}")
+                encoded_params = urlencode(params)
+            else:
+                api_url = f'{self.base_url}/api/v3/{module_name}/{module_id}/_timesheet'
+                self.logger.debug(f"Get_Worklogs: Calling {api_url}")
+                encoded_params = ""
+                
+
+            
             final_url = f"{api_url}?{encoded_params}"
 
             info_dict = {
                 "url" : final_url,
-                "headers" : headers,
-                "params": params,
+                "headers" : self.headers,
                 "method": "get"
             }
 
-            response_dict = self.send_response(info_dict)
+            id_info_dict = {'module_id': module_id}
 
-            if response_dict:
-                self.logger.info(json.dumps(response_dict,indent=4))
+            response_list.append([id_info_dict,self.send_response(info_dict)])
 
+        for response_pair in response_list:
+            id_info = response_pair[0]
+            response = response_pair[1]
+
+            module_id = id_info.get('module_id')
+            
+            worklogs = response.get('response',{}).get('worklogs',[]) or response.get('response',{}).get('timesheet',[])
+
+            for worklog in worklogs:
+                owner = worklog.get('owner',{})
+                tech_name = owner.get('name')
+                tech_email = owner.get('email_id') or owner.get('email')
+                time_spent_ms = worklog.get('time_spent',{}).get('value') or worklog.get('total_time_spent')
+                if isinstance(time_spent_ms,dict):
+                    hours = int(time_spent_ms.get('hours',0))
+                    minutes = int(time_spent_ms.get('minutes',0))
+                    time_spent_ms = (hours*60*60*1000) + (minutes*60*1000)
+                start_time = worklog.get('start_time',{}).get('display_value')
+                worklog_id = worklog.get('id') or module_id
+
+                if module_id:
+                    worklog_dict[module_id]['worklog_details'][worklog_id] = {
+                        'worklog_id': worklog_id,
+                        'tech_name': tech_name,
+                        'tech_email': tech_email,
+                        'time_spent_ms': time_spent_ms,
+                        'start_time': start_time
+                    }
+        self.logger.info(f"Get_Worklogs: Created {len(worklog_dict)} worklogs.")
+
+        return worklog_dict
+                    
     def get_worklogs_from_servicedesk(self, module_name: str, max_pages:int, fields_required:list=None, search_criteria:dict=None) -> dict:
         """
         Retrieves worklogs from ServiceDesk. Takes a module name and iterates over module_ids (up to the specified amount of max pages)
@@ -371,9 +434,6 @@ class ServiceDesk_Connector(Connector):
             worklog_dict (dict): Contains worklogs in format:
             {
                 module_id:{
-                    task_id: {
-                        worklog_details: {}
-                    }
                     worklog_details: {}
                 }
             }
@@ -387,32 +447,40 @@ class ServiceDesk_Connector(Connector):
             if response:
                 module_id_list = response.get('response',{}).get(module_name,{})
                 has_more_rows = response.get('response',{}).get('list_info',{}).get('has_more_rows',False)
-                worklog_dict = {item['id'] : 
-                                {
-                                    "module_id": item['id'],
-                                    "tasks" : {
-                                        "task_ids": [],
-                                        "worklog_details": {
-                                            #task_id : {info}
-                                        }
-                                    },
-                                    "worklog_details": {
-                                        #module_id: {info}
-                                    }
-
-                                } 
-                            for item in module_id_list
-                            }
-                self.logger.info(f"Get_Worklogs: Retreived {len(worklog_dict)} items.")
+                worklog_dict.update(
+                    {item['id'] : 
+                        {
+                            "module_id": item['id'],
+                            "worklog_details": {
+                            },
+                            "is_incident": (not item.get('is_service_request') if module_name == 'requests' else None) 
+                        } 
+                        for item in module_id_list
+                    }
+                )
+                self.logger.info(f"Get_Worklogs: Retreived ({len(worklog_dict)}/{max_pages*100}) items.")
             else:
                 self.logger.error(f"Get_Worklogs encountered an error retreiving a response.")
                 has_more_rows = False
             
             current_page += 1
+        self.logger.info(f"Get_Worklogs: Retreived total of {len(worklog_dict)} items.")
         
-        self.get_list_of_task_ids(module_name, worklog_dict)
+        # worklog_dict = self.get_list_of_task_ids(module_name, worklog_dict)
+        worklog_dict = self.get_worklogs(module_name,worklog_dict)
+        cleaned_worklog_dict = {
+            key : worklogs
+            for key, worklogs in worklog_dict.items() 
+            if worklogs.get('worklog_details')
+        }
+
+
+        self.logger.info(f"Get Worklogs: Done fetching worklogs.")
         
-        return worklog_dict
+        return cleaned_worklog_dict
+    
+
+
 
 
 

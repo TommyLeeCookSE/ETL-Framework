@@ -20,7 +20,6 @@ def main():
         logger.info(f"Main: Current working directory: {os.getcwd()}")
         logger.info(f"Main: {script_name} executed, doing something...")
 
-        #Connects to SharePoint, gets the SharePoint list, trim it of the unrequired keys/values
         sharepoint_connector_o = SharePoint_Connector(logger)
 
         fields = ['Technician','Techician_Name', 'Request_Number', 'User_Type', 'User', 'User_Name', 'User_Department', 'User_Location', 'Asset_Type', 'Serial_Number', 'Barcode', 'Bag_Type', 'Replaced_Serial_Number', 'Updated']
@@ -33,7 +32,8 @@ def main():
 
         logger.info(f"Main: Getting Asset Pickup History.")
         raw_sharepoint_items_dict = sharepoint_connector_o.get_item_ids('Asset_Pickup_History', field_string)
-        sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') != 'success'}
+        # sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') != 'success'}
+        sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') == 'test'}
         
         logger.info(json.dumps(sharepoint_items_dict,indent=4))
 
