@@ -52,8 +52,7 @@ class ServiceDesk_Connector(Connector):
             asset_data['asset']['location'] = change_item.get('User_Location')
 
         formatted_item = json.dumps(asset_data,indent=4)
-        self.logger.info(f"Build_Asset_Data: Asset Data: {json.dumps(asset_data,indent=4)}")
-        self.logger.info(f"Build_Asset_Data: F-string Asset Data: {formatted_item}")
+        self.logger.info(f"Build_Asset_Data: Asset Data: {formatted_item}")
 
         return formatted_item
         
@@ -73,29 +72,6 @@ class ServiceDesk_Connector(Connector):
         formatted_deque = deque()
         for key,item in change_dict.items():
             if module_name == "asset_upload":
-                # input_data = f'''{{
-                #                     "asset" : {{
-                #                         "serial_number": "{item.get('Serial_Number','')}",
-                #                         "barcode": "{int(item.get('Barcode',''))}",
-                #                         "udf_fields":{{
-                #                             "udf_char8": "{int(item.get('Request_Number',''))}",
-                #                             "udf_char7": "{item.get('Replaced_Serial_Number')}"
-                #                         }},
-                #                         "department":{{
-                #                             "name": "{item.get('User_Department','')}"
-                #                         }},
-                #                         "location":{item.get('User_Location','')},
-                #                         "user":{{
-                #                             "name": "{item.get('User_Name','')}",
-                #                             "email_id": "{item.get('User','')}"
-                #                         }},
-                #                         "state":{{
-                #                             "name": "In Use",
-                #                         }}
-                #                     }}
-
-                # }}'''
-
                 input_data = self.build_servicedesk_asset_data(item)
 
                 input_dict = {
@@ -105,7 +81,6 @@ class ServiceDesk_Connector(Connector):
                     'sharepoint_id': key,
                     }
             
-
             self.logger.info(f"Format_and_Batch: Formatted item: {input_dict}")
             formatted_deque.append(input_dict)
         
@@ -113,19 +88,22 @@ class ServiceDesk_Connector(Connector):
         
         return formatted_deque
     
-    def upload_to_servicedesk(self, formatted_deque: deque):
+    def upload_to_servicedesk(self, formatted_deque: deque)-> list:
         """
         Takes in a deque and iterates over it, uploading each item to Service Desk.
 
         Args:
             formatted_deque (deque): Contains a deque of dicts to be uploaded.
+        Returns:
+            response_list (list): List contains dicts that have {sharepoint_id: (str), response_item: (dict)}
 
         """
         self.logger.info("Upload_to_Servicedesk: Beginning upload to ServiceDesk.")
 
-
+        response_list = []
+        counter = 1
         while formatted_deque:
-            self.logger.info(f"Upload_to_Servicedesk: {len(formatted_deque)} Items to upload to ServiceDesk.")
+            self.logger.info(f"Upload_to_Servicedesk: ({counter}/{len(formatted_deque)}) Items to upload to ServiceDesk.")
             upload_item = formatted_deque.pop()
             self.logger.debug(f"Upload_to_Servicedesk: Uploading item: {upload_item}")
 
@@ -144,9 +122,12 @@ class ServiceDesk_Connector(Connector):
 
             response = self.send_response(info_dict)
 
-            if (status := response.get('status')):
-                return status, sharepoint_id
+            if (response := response):
+                response_dict = {'sharepoint_id': sharepoint_id, 'response_item': response}
+                response_list.append(response_dict)
+            counter += 1
 
+        return response_list
     def get_assets_from_servicedesk(self, asset_id: int = None, serial_number:str = None, last_updated:int = None) -> dict:
         """
         Gets assets from servicedesk. If asset_id is specified, pulls only that asset_id. If last_updated is specified, pulls all items since that date. If nothing is specified, pulls everything.

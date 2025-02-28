@@ -32,10 +32,7 @@ def main():
 
         logger.info(f"Main: Getting Asset Pickup History.")
         raw_sharepoint_items_dict = sharepoint_connector_o.get_item_ids('Asset_Pickup_History', field_string)
-        # sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') != 'success'}
-        sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') == 'test'}
-        
-        logger.info(json.dumps(sharepoint_items_dict,indent=4))
+        sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') == 'success'}
 
         servicedesk_connector_o = ServiceDesk_Connector(logger)
         formatted_deque = servicedesk_connector_o.format_and_batch_for_upload_servicedesk(sharepoint_items_dict, "asset_upload")
@@ -46,16 +43,26 @@ def main():
                 temp_asset_dict = servicedesk_connector_o.get_assets_from_servicedesk(serial_number=serial_number)
                 asset = next(iter(temp_asset_dict.values()))
                 item['asset_id'] = asset['asset_id']
+            logger.debug(f"Main: Item: {json.dumps(item,indent=4)}")
 
-        status,sharepoint_id = servicedesk_connector_o.upload_to_servicedesk(formatted_deque)
-        logger.debug(status)
-        
-        upload_dict= {1: {
-            'sharepoint_id': sharepoint_id, 
-            'Updated': status, 
-            'operation' : 'PATCH', 
-            'unique_id_field': sharepoint_id
-            }}
+        response_list = servicedesk_connector_o.upload_to_servicedesk(formatted_deque)
+        logger.debug(json.dumps(response_list,indent=4))
+
+        upload_dict = {}
+        for response_dict in response_list:
+            sharepoint_id = response_dict.get('sharepoint_id')
+            status = response_dict.get('response_item',{}).get('status','fail')
+
+            upload_dict.update({
+                sharepoint_id: {
+                    'sharepoint_id': sharepoint_id,
+                    'Updated': status,
+                    'operation': 'PATCH',
+                    'unique_id_field': sharepoint_id
+                }
+            })
+
+        logger.debug(json.dumps(upload_dict,indent=4))
 
 
         batch_que = sharepoint_connector_o.format_and_batch_for_upload_sharepoint(upload_dict, 'Asset_Pickup_History')
