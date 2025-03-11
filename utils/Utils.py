@@ -57,7 +57,7 @@ def generate_checksum(data: dict)-> Tuple[dict, str]:
 
 def update_cache(cache_list: list, sharepoint_dict: dict, id_key: str) -> list:
     """
-    Takes in two dicts, cache_dict and sharepoint_dict and a id_key used to create the key for each dict.
+    Takes in a list and a dict, cache_list and sharepoint_dict and a id_key used to create the key for each dict.
     Maps sharepoint_dict to the proper format to allow cache_dict to compare keys.
     Takes the sharepoint_id from sharepoint_dict and saves it in cache.
     Returns a single dict which will be the new cache.

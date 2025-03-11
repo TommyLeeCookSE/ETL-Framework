@@ -333,9 +333,25 @@ class SharePoint_Connector(Connector):
                     "asset_category": "asset_category",
                     "asset_manu": "asset_manu",
                     "asset_serial_no": "asset_serial_no",
-                    "warranty_expiry_date": "warranty_expiry_date"
+                    "warranty_expiry_date": "warranty_expiry_date",
+                    "missing_barcode": "missing_barcode",
+                    "missing_annual_replacement_amoun": "missing_annual_replacement_amount"
                 },
                 'unique_id_field': 'name',
+            },
+            'ServiceDesk_Worklogs': {
+                'fields': {
+                    'module': 'module',
+                    'unique_id': 'unique_id',
+                    'module_id': 'module_url',
+                    'created_time': 'start_time',
+                    'minutes': 'time_spent_minutes',
+                    'hours': 'time_spent_hours',
+                    'tech_name': 'tech_name',
+                    'tech_email': 'tech_email',
+                    'worklog_id': 'worklog_ids_str'
+                },
+                'unique_id_field': 'unique_id',
             },
 
         }

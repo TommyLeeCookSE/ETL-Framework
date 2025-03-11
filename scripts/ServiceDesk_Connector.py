@@ -34,6 +34,9 @@ class ServiceDesk_Connector(Connector):
                     "udf_char8": int(change_item.get("Request_Number", "0")) if change_item.get("Request_Number") else "",
                     "udf_char7": change_item.get("Replaced_Serial_Number", "")
                 },
+                "department": {
+                    "name" : change_item.get('User_Department') 
+                },
                 "state": {
                     "name": "In Use"
                 }
@@ -48,7 +51,6 @@ class ServiceDesk_Connector(Connector):
                 'email_id': change_item.get('User','')
             }
         elif user_type == 'Shared Device':
-            asset_data['asset']['department']['name'] = change_item.get('User_Department','')
             asset_data['asset']['location'] = change_item.get('User_Location')
 
         formatted_item = json.dumps(asset_data,indent=4)
@@ -56,7 +58,6 @@ class ServiceDesk_Connector(Connector):
 
         return formatted_item
         
-
     def format_and_batch_for_upload_servicedesk(self,change_dict: dict, module_name: str) -> deque:
         """
         Takes in a change dict, formats items for the specific servicedesk upload type, then batches and returns a deque for uploading to servicedesk.
@@ -342,17 +343,11 @@ class ServiceDesk_Connector(Connector):
                 })        
             }
 
-            if module_name != "projects":
-                api_url = f'{self.base_url}/api/v3/{module_name}/{module_id}/worklogs'
-                self.logger.debug(f"Get_Worklogs: Calling {api_url}")
-                encoded_params = urlencode(params)
-            else:
-                api_url = f'{self.base_url}/api/v3/{module_name}/{module_id}/_timesheet'
-                self.logger.debug(f"Get_Worklogs: Calling {api_url}")
-                encoded_params = ""
-                
 
-            
+            api_url = f'{self.base_url}/api/v3/{module_name}/{module_id}/worklogs'
+            self.logger.debug(f"Get_Worklogs: Calling {api_url}")
+            encoded_params = urlencode(params)
+
             final_url = f"{api_url}?{encoded_params}"
 
             info_dict = {
@@ -396,7 +391,83 @@ class ServiceDesk_Connector(Connector):
         self.logger.info(f"Get_Worklogs: Created {len(worklog_dict)} worklogs.")
 
         return worklog_dict
-                    
+
+    def get_list_project_tasks(self, worklog_dict, fields_required:list = None, search_criteria:dict = None)-> dict:
+        """
+        Retrieves list of project tasks and returns a dict with the required information.
+
+        Args:
+        worklog_doct
+            worklog_dict (dict): Dict containing the ids of modules and tasks.
+            fields_required (list): Limits what fields are returned.
+            search_criteria (dict): Ensures only certain records are returned.
+        Returns:
+            id_dict (dict): Dict that contains the worklogs
+        """
+        response_list = []
+
+        total_items = len(worklog_dict)
+        for counter, values in enumerate(worklog_dict.values(), start=1):
+            module_id = values.get('module_id')
+            self.logger.info(f"Get_Worklogs: Getting list of tasks ({counter}/{total_items}) for PROJECTS |  Ticket: {module_id}")
+
+            params = {
+                "input_data": json.dumps({
+                    "list_info":{
+                        "row_count": self.max_row_count,
+                        "sort_field": "id",
+                        "sort_order": "asc",
+                        **({"search_criteria": (search_criteria := search_criteria)} if search_criteria else {}),
+                        **({"fields_required": (fields_required := fields_required)} if fields_required else {})
+                    }
+                })        
+            }
+
+
+            api_url = f'{self.base_url}/api/v3/projects/{module_id}/tasks'
+            self.logger.debug(f"Get_Worklogs: Calling {api_url}")
+            encoded_params = urlencode(params)
+
+            final_url = f"{api_url}?{encoded_params}"
+
+            info_dict = {
+                "url" : final_url,
+                "headers" : self.headers,
+                "method": "get"
+            }
+
+            id_info_dict = {'module_id': module_id}
+
+            raw_response = self.send_response(info_dict)
+            tasks = raw_response.get('response',{}).get('tasks',[])
+            for task in tasks:
+                task_id = task.get('id')
+                project_id = task.get('project',{}).get('id')
+                owner = task.get('owner',{})
+                if owner:
+                    tech_name = owner.get('name')
+                    tech_email = owner.get('email_id')
+                else:
+                    tech_name = None
+                    tech_email = None
+                created_time = task.get('created_date',{}).get('display_value')
+                time_spent_ms = task.get('estimated_effort')
+                title = task.get('title')
+
+                if project_id in worklog_dict:
+                    worklog_dict[project_id]['worklog_details'][task_id] = {
+                        'task_id' : task_id,
+                        'tech_name' : tech_name,
+                        'tech_email' : tech_email,
+                        'start_time' : created_time,
+                        'time_spent_ms' : time_spent_ms,
+                        'title' : title
+                    }
+
+        self.logger.info(f"Get_Worklogs: Created {len(worklog_dict)} worklogs.")
+
+        return worklog_dict
+
     def get_worklogs_from_servicedesk(self, module_name: str, max_pages:int, fields_required:list=None, search_criteria:dict=None) -> dict:
         """
         Retrieves worklogs from ServiceDesk. Takes a module name and iterates over module_ids (up to the specified amount of max pages)
@@ -447,14 +518,15 @@ class ServiceDesk_Connector(Connector):
             current_page += 1
         self.logger.info(f"Get_Worklogs: Retreived total of {len(worklog_dict)} items.")
         
-        # worklog_dict = self.get_list_of_task_ids(module_name, worklog_dict)
-        worklog_dict = self.get_worklogs(module_name,worklog_dict)
-        cleaned_worklog_dict = {
-            key : worklogs
-            for key, worklogs in worklog_dict.items() 
-            if worklogs.get('worklog_details')
-        }
-
+        if module_name != 'projects':
+            worklog_dict = self.get_worklogs(module_name,worklog_dict)
+            cleaned_worklog_dict = {
+                key : worklogs
+                for key, worklogs in worklog_dict.items() 
+                if worklogs.get('worklog_details')
+            }
+        else:
+            cleaned_worklog_dict = self.get_list_project_tasks(worklog_dict)
 
         self.logger.info(f"Get Worklogs: Done fetching worklogs.")
         

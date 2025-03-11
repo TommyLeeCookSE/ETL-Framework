@@ -32,8 +32,8 @@ def main():
 
         logger.info(f"Main: Getting Asset Pickup History.")
         raw_sharepoint_items_dict = sharepoint_connector_o.get_item_ids('Asset_Pickup_History', field_string)
-        sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') == 'success'}
-
+        sharepoint_items_dict = {key: value for key, value in raw_sharepoint_items_dict.items() if value.get('Updated') != 'success'}
+        logger.debug(f'Main: Values in sharepoint items dict: {json.dumps(sharepoint_items_dict,indent=4)}')
         servicedesk_connector_o = ServiceDesk_Connector(logger)
         formatted_deque = servicedesk_connector_o.format_and_batch_for_upload_servicedesk(sharepoint_items_dict, "asset_upload")
 
@@ -41,8 +41,11 @@ def main():
             if (serial_number:= item.get('serial_number')):
                 logger.debug(f"Main: Serial Number: {serial_number}")
                 temp_asset_dict = servicedesk_connector_o.get_assets_from_servicedesk(serial_number=serial_number)
-                asset = next(iter(temp_asset_dict.values()))
-                item['asset_id'] = asset['asset_id']
+                if temp_asset_dict:
+                    asset = next(iter(temp_asset_dict.values()))
+                    item['asset_id'] = asset['asset_id']
+                else:
+                    logger.warning(f"No asset found for serial number: {serial_number}")
             logger.debug(f"Main: Item: {json.dumps(item,indent=4)}")
 
         response_list = servicedesk_connector_o.upload_to_servicedesk(formatted_deque)

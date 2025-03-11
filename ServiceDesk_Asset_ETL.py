@@ -47,7 +47,7 @@ def clean_servicedesk_asset_details(raw_dict: dict) -> dict:
             "imei_number": value.get("udf_fields", {}).get("udf_char9"),
             "cellular_provider": value.get("udf_fields", {}).get("udf_char14"),
             "replacement_fund": value.get("udf_fields", {}).get("udf_char4"),
-            "replacement_date": (udf_date.get('display_value') if (udf_date := value.get('udf_fields',{}).get('udf_date1')) else None),
+            "replacement_date": (udf_date := value.get('udf_fields', {}).get('udf_date1')) and datetime.strptime(udf_date.get('display_value'), "%b %d, %Y %I:%M %p").strftime("%b %d, %Y"),
             "annual_replacement_amt": value.get("udf_fields", {}).get("udf_double1"),
             "acquisition_date": (acquistion_date.get("display_value") if (acquistion_date := value.get("acquisition_date")) else None),
             "asset_vendor_name": (vendor.get('name') if (vendor := value.get('vendor')) else None),
@@ -111,7 +111,21 @@ def main():
 
         #Send to sharepoint to upload
         sharepoint_connector_o = SharePoint_Connector(logger)
-        
+
+        for item in current_data[1].values():
+            barcode = item.get('barcode')
+            if not barcode:
+                item['missing_barcode'] = 'Y'
+            else:
+                item['missing_barcode'] = 'N'
+
+            annual_payment_amt = item.get('annual_replacement_amt')
+            if not annual_payment_amt:
+                item['missing_annual_replacement_amount'] = 'Y'
+            else:
+                item['missing_annual_replacement_amount'] = 'N'
+            
+
         logger.info("Main: Formatting and batching for upload.")
         batched_queue=sharepoint_connector_o.format_and_batch_for_upload_sharepoint(current_data[1],"ServiceDesk_Assets")
         logger.info(f"Main: Formatted and batched {len(batched_queue)} items for SharePoint")
@@ -120,9 +134,6 @@ def main():
         sharepoint_connector_o.batch_upload(batched_queue)
         logger.info("Main: Uploaded items to SharePoint.")
 
-        #Get current time in iso and string, upload to cache along with new items.
-        # operations = current_data[3].get('operations')
-        # if operations['post'] > 0:
         logger.info("Main: Post detected, getting SharePoint ids and updating cache.")
 
         sharepoint_list_items = sharepoint_connector_o.get_item_ids('ServiceDesk_Assets')
