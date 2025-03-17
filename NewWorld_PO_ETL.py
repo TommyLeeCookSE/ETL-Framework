@@ -247,7 +247,7 @@ def main():
         previous_cache = read_from_json(cache_file_path)
 
         logger.info("Begining caching operations.")
-        current_data = cache_operation(po_dict, previous_cache, logger)
+        current_data = cache_operation(po_dict, previous_cache, delete=True, logger=logger)
         
         status = current_data[2].get('status')
         if status == 'exit':

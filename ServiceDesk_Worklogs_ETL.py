@@ -172,10 +172,6 @@ def main():
 
         cached_info = cache_operation(final_worklogs_dict, current_servicedesk_cache_list)
 
-        for ticket in cached_info[1].values():
-            if ticket.get('operation') == 'DELETE':
-                ticket['operation'] = 'IGNORE' #PREVENT worklogs from being deleted..
-
         logger.info(f"Main: Cleaned, Combined, and Cached Dict Values: {json.dumps(cached_info,indent=4)}")
 
         if cached_info[2].get('status') == 'exit':

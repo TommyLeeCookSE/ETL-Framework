@@ -43,7 +43,7 @@ class ServiceDesk_Connector(Connector):
             }
         }
 
-        user_type = change_item.get('user_type',"")
+        user_type = change_item.get('User_Type',"")
 
         if user_type == 'User':
             asset_data['asset']['user'] = {
@@ -129,6 +129,7 @@ class ServiceDesk_Connector(Connector):
             counter += 1
 
         return response_list
+    
     def get_assets_from_servicedesk(self, asset_id: int = None, serial_number:str = None, last_updated:int = None) -> dict:
         """
         Gets assets from servicedesk. If asset_id is specified, pulls only that asset_id. If last_updated is specified, pulls all items since that date. If nothing is specified, pulls everything.

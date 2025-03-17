@@ -8,6 +8,40 @@ from scripts.SharePoint_Connector import *
 from collections import deque
 from utils.Utils import *
 
+def clean_items(azure_dict:dict) -> dict:
+    """
+    Takes in an azure dict, cleans and renames keys, returns a dict in sharepoint format.
+
+    Args:
+        azure_dict (dict): Dict of items pulled from azure.
+    Returns:
+        cleaned_azure_dict (dict): Dict with keys renamed and other data removed.
+    """
+    cleaned_azure_dict = {}
+    for values in azure_dict.values():
+        azure_id = values.get('id','N/A') or 'N/A'
+        department = values.get('department','N/A') or 'N/A' 
+        employee_id = values.get('employeeId','N/A') or 'N/A'
+        job_title = values.get('jobTitle','N/A') or 'N/A'
+        active = values.get('accountEnabled','N/A') or 'N/A'
+        display_name = values.get('displayName','N/A') or 'N/A'
+        licenses = values.get('licenses')
+        email = values.get('mail','N/A') or 'N/A'
+        manager = values.get('manager','N/A') or 'N/A'
+
+        cleaned_azure_dict[azure_id] = {
+            'Department': department,
+            'Employee_Id': employee_id,
+            'Job_Title' : job_title,
+            'Active': active,
+            'Azure_Id': azure_id,
+            'Manager': manager,
+            'Display_Name' : display_name,
+            'Licenses': licenses,
+            'Email': email
+        }
+    
+    return cleaned_azure_dict
 
 def fix_license(wrong_license: str) -> str:
     """
@@ -29,11 +63,18 @@ def fix_license(wrong_license: str) -> str:
 
 def main():
     try:
+        cache_file_path = r'cache\azure_user_info_cache.json'
         script_name = Path(__file__).stem
         logger = setup_logger(script_name)
 
         logger.info(f"{script_name} executed, getting user information and license information.")
         logger.info(f"Initializing Azure Connector and retirieving Access Token.")
+
+        sharepoint_connector_o = SharePoint_Connector(logger)
+        cached_sharepoint_items = sharepoint_connector_o.get_item_ids('COT_Employees')
+        cached_sharepoint_items = trim_sharepoint_keys(cached_sharepoint_items)
+        cached_sharepoint_items = reassign_key(cached_sharepoint_items,'Azure_Id')
+        logger.info(f"Cached sharepoint items: {json.dumps(cached_sharepoint_items,indent=4)}")
 
         #Sets up azure connector
         azure_connector_o = Azure_Connector(logger)
@@ -57,19 +98,26 @@ def main():
             else:
                 value['accountEnabled'] = "False"
 
-        logger.debug(json.dumps(azure_user_info_dict,indent=4))
-        previous_cache_file_path = project_root / 'cache' / 'azure_user_info_cache.json'
-        previous_azure_user_info_list = read_from_json(previous_cache_file_path)
+        azure_user_info_dict = clean_items(azure_user_info_dict)
+        azure_user_info_dict = merge_sharepoint_ids(azure_user_info_dict, cached_sharepoint_items)
 
-        current_data = cache_operation(azure_user_info_dict, previous_azure_user_info_list)
+        previous_azure_user_info_list = read_from_json(cache_file_path)
+        previous_azure_user_info_list[1] = cached_sharepoint_items
+        current_data = cache_operation(azure_user_info_dict, previous_azure_user_info_list, delete=True, logger=logger)
         
         status = current_data[2].get('status')
-
+    
         if status == 'exit':
             logger.info("No changes deteced in checksum, ending ETL.")
             return
         else:
             logger.info("Changes detected in checksum, checking changes.")
+
+        for value in current_data[1].values():
+            licenses_data_type = 'Collection(Edm.String)'
+            value['licenses_data_type'] = licenses_data_type
+        
+        logger.info(f"Cached Info: {json.dumps(current_data,indent=4)}")
 
         sharepoint_connector_o = SharePoint_Connector(logger)
         #Formats and batches items for SharePoint upload.
@@ -80,22 +128,9 @@ def main():
 
         sharepoint_connector_o.batch_upload(batched_queue)
 
-        #If there was any POST, then we need to get the new sharepoint IDS
-        # operations = current_data[3].get('operations')
-        # if operations['post'] > 0:
-        
         logger.info(f"Updating cache with new info...")
-        #Gets item ids from SharePoint
-        sharepoint_list_items = sharepoint_connector_o.get_item_ids('COT_Employees')
-
-        sharepoint_items_file_path = project_root / 'outputs' / 'azure_user_info_sharepoint_items.json'
-        write_to_json(sharepoint_list_items,sharepoint_items_file_path)
         
-        #Updates cache with the new SharePoint IDs
-        logger.info("Updating cache with SharePoint info...")
-        full_cache = update_cache(current_data, sharepoint_list_items,'Azure_Id')
-        write_to_json(full_cache,previous_cache_file_path)
-        
+        write_to_json(current_data, cache_file_path)
         
         logger.info("ETL Completed successfully: Exit Code 0")
         return 0

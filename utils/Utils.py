@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Tuple
 from collections import deque
 
-def cache_operation(current_dict, previous_cache_l, logger=None):
+def cache_operation(current_dict, previous_cache_l, delete: str=False, logger: object = None):
     """
     Takes in the current_dict and the previous_cache list.
     Calls generate checksum which takes in the current_dict and returns (current_dict, total_checksum)
@@ -19,6 +19,10 @@ def cache_operation(current_dict, previous_cache_l, logger=None):
         list : Either ['continue'] or [{operations}, {current_cache}]
     """
     current_cache_l = generate_checksum(current_dict)
+    previous_cache_l = generate_checksum(previous_cache_l[1])
+
+    logger.info(f"Current Cache: {json.dumps(current_cache_l,indent=4)}")
+    logger.info(f"Previous Cache: {json.dumps(previous_cache_l,indent=4)}")
     
     current_cache_l = check_cache(previous_cache_l,current_cache_l)
 
@@ -26,7 +30,7 @@ def cache_operation(current_dict, previous_cache_l, logger=None):
     if change_status == 'exit':
         pass
     elif change_status == 'continue':
-        current_cache_l = check_changes(previous_cache_l,current_cache_l, logger)
+        current_cache_l = check_changes(previous_cache_l,current_cache_l, delete, logger)
 
     return current_cache_l
 
@@ -88,6 +92,7 @@ def check_cache(previous_list: list, current_list: list) -> str:
     Args:
         previous_list (list): List that contains the previously saved cache in format: [{total_checksum},{items}]
         current_list (list): List that contains the current saved cache in format:     [{total_checksum},{items}]
+        delete (bool): Used to determine if the function will assign DELETE or NONE to items.
     
     Returns
         'continue' (str) : If there are no changes.
@@ -105,7 +110,7 @@ def check_cache(previous_list: list, current_list: list) -> str:
 
     return current_list
 
-def check_changes(previous_list: list, current_list: list, logger) -> list:
+def check_changes(previous_list: list, current_list: list, delete, logger) -> list:
     """
     Checks the previous list to the current list. Iterate through each item checking for:
     1. If the key is in the other dict and if the checksum has changed. Add an operation key with the value PATCH.
@@ -115,6 +120,7 @@ def check_changes(previous_list: list, current_list: list, logger) -> list:
     Args:
         previous_list (list): List that contains the previously saved cache in format: [{total_checksum},{items}]
         current_list (list): List that contains the current saved cache in format:     [{total_checksum},{items}]
+        delete (bool): If Delete == True, then the function will assign DELETE, otherwise, it will assign NONE
     
     Returns:    
         current_list (list): List of dicts that contains the changes that need to be batched and uploaded as well as their operations.
@@ -122,13 +128,18 @@ def check_changes(previous_list: list, current_list: list, logger) -> list:
     operations = {'post':0,'patch':0,'delete':0,'none':0}
     previous_dict = previous_list[1]
     current_dict = current_list[1]
+    
+    if delete == True:
+        delete_op = 'DELETE'
+    else:
+        delete_op = 'NONE'
 
     for prev_key, prev_value in previous_dict.items():
         if prev_key not in current_dict:
             # Item was removed, mark as DELETE
-            prev_value['operation'] = 'DELETE'
+            prev_value['operation'] = delete_op
             prev_value['sharepoint_id'] = prev_value.get('sharepoint_id', '')
-            operations['delete'] += 1
+            operations[delete_op.lower()] += 1
         else:
             # Ensure sharepoint_id is retained
             current_dict[prev_key]['sharepoint_id'] = prev_value.get('sharepoint_id', '')
@@ -138,6 +149,7 @@ def check_changes(previous_list: list, current_list: list, logger) -> list:
                 current_dict[prev_key]['operation'] = 'NONE'
                 operations['none'] += 1
             else:
+                # logger.info(f"Previous Checksum: {prev_value.get('checksum')} | Current Checksum: {current_dict[prev_key].get('checksum')}")
                 current_dict[prev_key]['operation'] = 'PATCH'
                 operations['patch'] += 1
 
@@ -151,21 +163,21 @@ def check_changes(previous_list: list, current_list: list, logger) -> list:
 
     return current_list
 
-def merge_sharepoint_ids(change_dict: dict, cached_list: list, logger:object) -> dict:
+def merge_sharepoint_ids(change_dict: dict, cached_dict: dict) -> dict:
     """
     Takes in a dict and downloads cached information.
     Iterates over the dict and checks the cache for matching Azure keys. If matching gets the sharepoint_id to prepare for upload.
 
     Args:
         change_dict (dict): Contains the users that have changes.
+        cached_dict (dict): Contains the old cache + sharepoint_keys.
     
     Returns:
         change_dict (dict): Updated change dict.
     """
     for key, value in change_dict.items():
-        logger.debug(f"Key: {json.dumps(key,indent=4)}")
-        logger.debug(f"Value: {json.dumps(value,indent=4)}")
-        value['sharepoint_id'] = cached_list[1][key].get('sharepoint_id',"")
+        if key in cached_dict:
+            value['sharepoint_id'] = cached_dict[key].get('sharepoint_id')
     
     return change_dict
 
@@ -194,7 +206,7 @@ def read_from_json(file_path)-> dict:
         data = json.load(json_file)
     return data
 
-def trim_sharepoint_keys(sharepoint_dict: dict, logger)-> dict:
+def trim_sharepoint_keys(sharepoint_dict: dict)-> dict:
     """
     Takes in a dict of sharepoint items, trims it to the predefined standards, returns the trimmed dict.
     
@@ -205,8 +217,49 @@ def trim_sharepoint_keys(sharepoint_dict: dict, logger)-> dict:
         trimmed_dict (dict): Dict with only the trimmed values.
 
     """
-    pass
+    trimmed_dict = {}
+    for key, item in sharepoint_dict.items():
+        unique_id = item.get('id')
+        trimmed_dict[unique_id] = item.copy()
+        trimmed_dict[unique_id]['sharepoint_id'] = key
+        del trimmed_dict[unique_id]['@odata.etag']
+        del trimmed_dict[unique_id]['id']
+        del trimmed_dict[unique_id]['Created']
+        del trimmed_dict[unique_id]['AuthorLookupId']
+        del trimmed_dict[unique_id]['EditorLookupId']
+        del trimmed_dict[unique_id]['_UIVersionString']
+        del trimmed_dict[unique_id]['Attachments']
+        del trimmed_dict[unique_id]['Edit']
+        del trimmed_dict[unique_id]['ItemChildCount']
+        del trimmed_dict[unique_id]['FolderChildCount']
+        del trimmed_dict[unique_id]['_ComplianceFlags']
+        del trimmed_dict[unique_id]['_ComplianceTag']
+        del trimmed_dict[unique_id]['_ComplianceTagWrittenTime']
+        del trimmed_dict[unique_id]['_ComplianceTagUserId']
+        del trimmed_dict[unique_id]['AppAuthorLookupId']
+        del trimmed_dict[unique_id]['AppEditorLookupId']
+        del trimmed_dict[unique_id]['ContentType']
+        del trimmed_dict[unique_id]['Modified']
     
+    return trimmed_dict
+
+def reassign_key(sharepoint_dict: dict, key_name:str)-> dict:
+    """
+    Takes in a dict and a str which holds the name of the key. Reassigns the items in the dict to the key name/
+
+    Args:
+        sharepoint_dict (dict): Dict of items from sharepoint.
+        key_name (str): Str of an item in the dict to be used as the key.
+    Returns:
+        reassigned_dict (dict): Dict that has it's keys reassigned.
+    """
+
+    reassigned_dict = {
+        value[key_name]: value
+        for value in sharepoint_dict.values()
+    }
+
+    return (reassigned_dict)
 
 def read_servicedesk_cache(servicedesk_cache_file_path)-> tuple:
     """

@@ -281,18 +281,18 @@ class SharePoint_Connector(Connector):
             },
             'COT_Employees': {
                 'fields': {
-                    "Email": "mail",
-                    "Display_Name": "displayName",
-                    "Department": "department",
-                    "Employee_Id": "employeeId",
-                    "Job_Title": "jobTitle",
-                    "Active": "accountEnabled",
-                    "Azure_Id": "id",
-                    "Manager": "manager",
+                    "Email": "Email",
+                    "Display_Name": "Display_Name",
+                    "Department": "Department",
+                    "Employee_Id": "Employee_Id",
+                    "Job_Title": "Job_Title",
+                    "Active": "Active",
+                    "Azure_Id": "Azure_Id",
+                    "Manager": "Manager",
                     "Licenses@odata.type": "licenses_data_type",
-                    "Licenses": "licenses"
+                    "Licenses": "Licenses"
                 },
-                'unique_id_field': 'id',
+                'unique_id_field': 'Azure_Id',
             },
             'Asset_Pickup_History': {
                 'fields': {
@@ -335,7 +335,7 @@ class SharePoint_Connector(Connector):
                     "asset_serial_no": "asset_serial_no",
                     "warranty_expiry_date": "warranty_expiry_date",
                     "missing_barcode": "missing_barcode",
-                    "missing_annual_replacement_amoun": "missing_annual_replacement_amount"
+                    "missing_annual_replacement_amoun": "missing_annual_replacement_amoun"
                 },
                 'unique_id_field': 'name',
             },
