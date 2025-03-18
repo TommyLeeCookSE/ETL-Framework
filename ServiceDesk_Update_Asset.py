@@ -61,7 +61,7 @@ def main():
                     'sharepoint_id': sharepoint_id,
                     'Updated': status,
                     'operation': 'PATCH',
-                    'unique_id_field': sharepoint_id
+                    'Unique_ID': sharepoint_id
                 }
             })
 

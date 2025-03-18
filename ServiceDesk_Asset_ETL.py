@@ -57,6 +57,7 @@ def clean_servicedesk_asset_details(raw_dict: dict) -> dict:
             "asset_manu": value.get("product", {}).get("manufacturer","N/A") or "N/A",
             "asset_serial_no": value.get("serial_number","N/A") or "N/A",
             "warranty_expiry_date": (expiry.get('display_value', "Jan 01, 1970") if (expiry := value.get('warranty_expiry')) else "Jan 01, 1970"),
+            "Unique_ID": value.get('name',"N/A")
         }
         for key,value in raw_dict.items()
     }

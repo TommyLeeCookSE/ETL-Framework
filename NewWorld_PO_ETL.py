@@ -134,7 +134,7 @@ def calculate_balance(po_dict:dict) -> None:
     Args:
         po_dict (dict): Dict containg data for a PO item.
     """
-    po_dict['Balance'] = po_dict['PO_Amount'] - po_dict['Expense']
+    po_dict['Balance'] = round(po_dict['PO_Amount'] - po_dict['Expense'], 2)
     balance_remaining_percent = po_dict['Balance'] / po_dict['PO_Amount']
     po_dict['Less_Than_25_Remaining'] = 'X' if balance_remaining_percent <= 0.25 else ' '
 
@@ -146,40 +146,19 @@ def check_expiry(po_dict:dict)-> None:
         po_dict (dict): Dict containg data for a PO item.
     """
     today = datetime.today().date()
-    if not po_dict['Expiration_Date']:
-        po_dict['Expiration_Date'] = "2029-01-01 00:00:00"
-    expiration_date = datetime.strptime(po_dict.get('Expiration_Date'), "%Y-%m-%d %H:%M:%S").date()
+    expiration_str = po_dict.get('Expiration_Date', "2029-01-01 00:00:00") or "2029-01-01 00:00:00"
+    expiration_date = datetime.strptime(expiration_str, "%Y-%m-%d %H:%M:%S").date()
     po_dict['Expiration_Date'] = str(expiration_date)
-    days_till_expired = (expiration_date-today).days
-    if expiration_date < today:
-        po_dict['Expired'] = 'X' 
-        po_dict['Less_Than_30_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_60_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_90_Days_Till_Expired'] = ' '
-    
-    elif days_till_expired <= 30:
-        po_dict['Expired'] = ' ' 
-        po_dict['Less_Than_30_Days_Till_Expired'] = 'X'
-        po_dict['Less_Than_60_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_90_Days_Till_Expired'] = ' '
 
-    elif days_till_expired <= 60:
-        po_dict['Expired'] = ' ' 
-        po_dict['Less_Than_30_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_60_Days_Till_Expired'] = 'X'
-        po_dict['Less_Than_90_Days_Till_Expired'] = ' '
-
-    elif days_till_expired <= 90:
-        po_dict['Expired'] = ' ' 
-        po_dict['Less_Than_30_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_60_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_90_Days_Till_Expired'] = 'X'
-    
-    else:
-        po_dict['Expired'] = ' ' 
-        po_dict['Less_Than_30_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_60_Days_Till_Expired'] = ' '
-        po_dict['Less_Than_90_Days_Till_Expired'] = ' ' 
+    days_till_expired = (expiration_date - today).days
+    statuses = {
+        'Expired': expiration_date < today,
+        'Less_Than_30_Days_Till_Expired': 0 <= days_till_expired <= 30,
+        'Less_Than_60_Days_Till_Expired': 31 <= days_till_expired <= 60,
+        'Less_Than_90_Days_Till_Expired': 61 <= days_till_expired <= 90
+    }
+    for key, condition in statuses.items():
+        po_dict[key] = 'X' if condition else 'N/A'
         
 def fix_department_names(po_dict:dict) -> None:
     """
@@ -243,10 +222,28 @@ def main():
         for item in formatted_po_info:
             po_dict[item['Unique_ID']] = item
         
+        ordered_keys = [
+            'Title', 'PO_Type', 'PO_Number', 'Vendor_Name', 'Description', 'PO_Amount', 'Expense', 'Balance', 'Expiration_Date',
+            'Expired', 'Less_Than_90_Days_Till_Expired', 'Less_Than_60_Days_Till_Expired', 'Less_Than_30_Days_Till_Expired',
+            'Contingency_Description', 'Contingency_Amount', 'Contingency_Used', 'Contingency_Balance', 'Last_Month_Update',
+            'Last_Month_Updated_By', 'Last_Month_Update_Date', 'This_Month_Update', 'This_Month_Updated_By', 'This_Month_Update_Date',
+            'Less_Than_25_Remaining', 'Unique_ID'
+        ]
+        po_dict = reformat_item(po_dict,ordered_keys)
+        
         cache_file_path = r"cache/po_info_cache.json"
         previous_cache = read_from_json(cache_file_path)
 
+        sharepoint_connector_o = SharePoint_Connector(logger)
+        cached_sharepoint_items = sharepoint_connector_o.get_item_ids('NewWorld_PO_Alert')
+        cached_sharepoint_items = trim_sharepoint_keys(cached_sharepoint_items)
+        cached_sharepoint_items = reassign_key(cached_sharepoint_items, 'Unique_ID')
+        previous_cache[1] = cached_sharepoint_items
+        # logger.info(f"Cached sharepoint items: {json.dumps(cached_sharepoint_items,indent=4)}")
+        logger.info(f"PO_Dict: {json.dumps(po_dict,indent=4)}")
+
         logger.info("Begining caching operations.")
+        po_dict = merge_sharepoint_ids(po_dict,cached_sharepoint_items)
         current_data = cache_operation(po_dict, previous_cache, delete=True, logger=logger)
         
         status = current_data[2].get('status')
@@ -256,8 +253,7 @@ def main():
         else:
             logger.info("Changes detected in checksum, checking changes.")
         
-        # logger.debug(json.dumps(current_data,indent=4))
-        sharepoint_connector_o = SharePoint_Connector(logger)
+        logger.debug(json.dumps(current_data,indent=4))
         
         logger.info("Formatting and batching for upload.")
         batched_queue=sharepoint_connector_o.format_and_batch_for_upload_sharepoint(current_data[1],"NewWorld_PO_Alert")
@@ -267,23 +263,10 @@ def main():
         sharepoint_connector_o.batch_upload(batched_queue)
         logger.info("Uploaded items to SharePoint.")
 
-        # operations = current_data[3].get('operations')
-        # if operations['post'] > 0:
-        logger.info("Post detected, getting SharePoint ids and updating cache.")
-
-        sharepoint_list_items = sharepoint_connector_o.get_item_ids('NewWorld_PO_Alert')
-
-        logger.info(f"{len(sharepoint_list_items)} items retreieved, saving cache.")
-        
-        sharpoint_items_file_path = 'outputs/po_alert_sharepoint_items.json'
-        write_to_json(sharepoint_list_items,sharpoint_items_file_path)
-        logger.info(f"Items saved to {sharpoint_items_file_path}")
-
         logger.info("Updating Cache with SharePoint info")
-        full_cache = update_cache(current_data,sharepoint_list_items,'Unique_ID')
-        write_to_json(full_cache,cache_file_path)
+        write_to_json(current_data,cache_file_path)
         
-        logger.info(f"ETL Completed successfully: Exit Code 0")
+        # logger.info(f"ETL Completed successfully: Exit Code 0")
     except Exception as e:
         logger.error(f"Error occured in main: {e}: Exit Code 1")
         logger.error("Traceback:", exc_info=True)

@@ -292,13 +292,13 @@ class SharePoint_Connector(Connector):
                     "Licenses@odata.type": "licenses_data_type",
                     "Licenses": "Licenses"
                 },
-                'unique_id_field': 'Azure_Id',
+                'unique_id_field': 'Unique_ID',
             },
             'Asset_Pickup_History': {
                 'fields': {
                     'Updated': 'Updated'
                 },
-                'unique_id_field': 'unique_id_field',
+                'unique_id_field': 'Unique_ID',
             },
             'ServiceDesk_Assets': {
                 'fields': {
@@ -337,7 +337,7 @@ class SharePoint_Connector(Connector):
                     "missing_barcode": "missing_barcode",
                     "missing_annual_replacement_amoun": "missing_annual_replacement_amoun"
                 },
-                'unique_id_field': 'name',
+                'unique_id_field': 'Unique_ID',
             },
             'ServiceDesk_Worklogs': {
                 'fields': {
@@ -351,7 +351,7 @@ class SharePoint_Connector(Connector):
                     'tech_email': 'tech_email',
                     'worklog_id': 'worklog_ids_str'
                 },
-                'unique_id_field': 'unique_id',
+                'unique_id_field': 'Unique_ID',
             },
 
         }

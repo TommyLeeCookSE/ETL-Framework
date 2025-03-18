@@ -136,9 +136,11 @@ def check_changes(previous_list: list, current_list: list, delete, logger) -> li
 
     for prev_key, prev_value in previous_dict.items():
         if prev_key not in current_dict:
-            # Item was removed, mark as DELETE
-            prev_value['operation'] = delete_op
-            prev_value['sharepoint_id'] = prev_value.get('sharepoint_id', '')
+            #If key is in previous cache but not in current cache
+            current_dict[prev_key] = {}
+            current_dict[prev_key]['operation'] = delete_op
+            current_dict[prev_key]['Unique_ID'] = prev_value.get('Unique_ID')
+            current_dict[prev_key]['sharepoint_id'] = prev_value.get('sharepoint_id', '')
             operations[delete_op.lower()] += 1
         else:
             # Ensure sharepoint_id is retained
@@ -218,28 +220,22 @@ def trim_sharepoint_keys(sharepoint_dict: dict)-> dict:
 
     """
     trimmed_dict = {}
-    for key, item in sharepoint_dict.items():
+    trimmed_set = {
+        '@odata.etag', 'id', 'Created', 'AuthorLookupId', 'EditorLookupId', '_UIVersionString', 'Attachments',
+        'Edit', 'ItemChildCount', 'FolderChildCount', '_ComplianceFlags', '_ComplianceTag', '_ComplianceTagWrittenTime',
+        '_ComplianceTagUserId', 'AppAuthorLookupId', 'AppEditorLookupId', 'ContentType', 'Modified', 'LinkTitle', 'LinkTitleNoMenu'
+    }
+    
+    for item in sharepoint_dict.values():
         unique_id = item.get('id')
-        trimmed_dict[unique_id] = item.copy()
-        trimmed_dict[unique_id]['sharepoint_id'] = key
-        del trimmed_dict[unique_id]['@odata.etag']
-        del trimmed_dict[unique_id]['id']
-        del trimmed_dict[unique_id]['Created']
-        del trimmed_dict[unique_id]['AuthorLookupId']
-        del trimmed_dict[unique_id]['EditorLookupId']
-        del trimmed_dict[unique_id]['_UIVersionString']
-        del trimmed_dict[unique_id]['Attachments']
-        del trimmed_dict[unique_id]['Edit']
-        del trimmed_dict[unique_id]['ItemChildCount']
-        del trimmed_dict[unique_id]['FolderChildCount']
-        del trimmed_dict[unique_id]['_ComplianceFlags']
-        del trimmed_dict[unique_id]['_ComplianceTag']
-        del trimmed_dict[unique_id]['_ComplianceTagWrittenTime']
-        del trimmed_dict[unique_id]['_ComplianceTagUserId']
-        del trimmed_dict[unique_id]['AppAuthorLookupId']
-        del trimmed_dict[unique_id]['AppEditorLookupId']
-        del trimmed_dict[unique_id]['ContentType']
-        del trimmed_dict[unique_id]['Modified']
+        trimmed_item = item.copy()
+        trimmed_item['sharepoint_id'] = unique_id
+        
+        for unwanted_key in trimmed_set:
+            if unwanted_key in trimmed_item:
+                del trimmed_item[unwanted_key]
+        
+        trimmed_dict[unique_id] = trimmed_item
     
     return trimmed_dict
 
@@ -276,3 +272,23 @@ def read_servicedesk_cache(servicedesk_cache_file_path)-> tuple:
     dates = servicedesk_cache[4]
 
     return checksum,items,dates,servicedesk_cache
+
+def reformat_item(unformatted_dict: dict, ordered_keys: list) -> dict:
+    """
+    Takes in a dict and reformats items order to match sharepoint so caching can work.
+    
+    Args:
+        unformatted_dict (dict): Dict of items from NewWorld DB.
+        ordered_keys (list): List  of keys used to retrieve values and establish order.
+    Returns:
+        formatted_dict (dict) Reformatted with items ordered to SharePoint orientation.
+    """
+    formatted_dict = {}
+    for key, values in unformatted_dict.items():
+        formatted_dict[key] = {}
+
+        for wanted_key in ordered_keys:
+                value = values.get(wanted_key)
+                formatted_dict[key][wanted_key] = value if value not in [None, ""," "] else "N/A"
+
+    return formatted_dict            

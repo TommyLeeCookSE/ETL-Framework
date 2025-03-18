@@ -108,7 +108,7 @@ def combine_data(tickets_dict:dict, module_key:str)-> dict:
 
             if unique_ticket_id not in consolidated_tickets:
                 consolidated_tickets[unique_ticket_id] = {
-                    "unique_id": unique_ticket_id,
+                    "Unique_ID": unique_ticket_id,
                     "module_id": module_id,
                     "tech_name": f'{tech_lname}, {tech_fname}',
                     "tech_email": tech_email,

@@ -38,7 +38,8 @@ def clean_items(azure_dict:dict) -> dict:
             'Manager': manager,
             'Display_Name' : display_name,
             'Licenses': licenses,
-            'Email': email
+            'Email': email,
+            'Unique_ID' : azure_id
         }
     
     return cleaned_azure_dict
