@@ -21,8 +21,8 @@ def cache_operation(current_dict, previous_cache_l, delete: str=False, logger: o
     current_cache_l = generate_checksum(current_dict)
     previous_cache_l = generate_checksum(previous_cache_l[1])
 
-    logger.info(f"Current Cache: {json.dumps(current_cache_l,indent=4)}")
-    logger.info(f"Previous Cache: {json.dumps(previous_cache_l,indent=4)}")
+    # logger.info(f"Current Cache: {json.dumps(current_cache_l,indent=4)}")
+    # logger.info(f"Previous Cache: {json.dumps(previous_cache_l,indent=4)}")
     
     current_cache_l = check_cache(previous_cache_l,current_cache_l)
 
@@ -168,7 +168,7 @@ def check_changes(previous_list: list, current_list: list, delete, logger) -> li
 def merge_sharepoint_ids(change_dict: dict, cached_dict: dict) -> dict:
     """
     Takes in a dict and downloads cached information.
-    Iterates over the dict and checks the cache for matching Azure keys. If matching gets the sharepoint_id to prepare for upload.
+    Iterates over the dict and checks the cache for matching keys. If matching gets the sharepoint_id to prepare for upload.
 
     Args:
         change_dict (dict): Contains the users that have changes.

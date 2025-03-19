@@ -342,14 +342,14 @@ class SharePoint_Connector(Connector):
             'ServiceDesk_Worklogs': {
                 'fields': {
                     'module': 'module',
-                    'unique_id': 'unique_id',
-                    'module_id': 'module_url',
-                    'created_time': 'start_time',
-                    'minutes': 'time_spent_minutes',
-                    'hours': 'time_spent_hours',
+                    'unique_id': 'Unique_ID',
+                    'module_id': 'module_id',
+                    'created_time': 'created_time',
+                    'minutes': 'minutes',
+                    'hours': 'hours',
                     'tech_name': 'tech_name',
                     'tech_email': 'tech_email',
-                    'worklog_id': 'worklog_ids_str'
+                    'worklog_id': 'worklog_id'
                 },
                 'unique_id_field': 'Unique_ID',
             },

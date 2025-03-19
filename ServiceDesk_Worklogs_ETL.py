@@ -57,13 +57,13 @@ def clean_and_format_data(worklogs_dict:dict, module_key:str) -> dict:
             
         
         module_url = f"https://servicedesk.torranceca.gov/app/itdesk/ui/{module_key}/{module_id}/details" if module_key != "changes" else f"https://servicedesk.torranceca.gov/app/itdesk/ChangeDetails.cc?CHANGEID={module_id}&selectTab=close&subTab=details"
-        module_key = "incident" if is_incident == True else module_key
+        local_module_key = "incident" if is_incident else module_key
 
-        ticket['time_spent_minutes'] = time_spent_minutes
-        ticket['time_spent_hours'] = time_spent_hours
+        ticket['minutes'] = time_spent_minutes
+        ticket['hours'] = time_spent_hours
         ticket['formatted_start_time'] = formatted_start_time
-        ticket['module'] = module_key
-        ticket['module_url'] = module_url
+        ticket['module'] = local_module_key
+        ticket['module_id'] = module_url
 
     return worklogs_dict
 
@@ -84,7 +84,6 @@ def combine_data(tickets_dict:dict, module_key:str)-> dict:
         module_id = ticket_value.get('module_id')
         worklog_dicts = ticket_value.get('worklog_details',{})
         is_incident = ticket_value.get('is_incident')
-        task_id = ticket_value.get('task_id') ##Use this instead of module_id to make the unique_id
         for worklog in worklog_dicts.values():
             tech_name = worklog.get('tech_name',None)
             if tech_name:
@@ -92,6 +91,7 @@ def combine_data(tickets_dict:dict, module_key:str)-> dict:
                 tech_fname = split_tech_name[1].strip()
                 tech_lname = split_tech_name[0].strip()
             else:
+                #All worklogs have a tech_name, only projects might be missing a tech_name, if missing, cannot make a unique_id and thus we skip it.
                 continue
 
             tech_email = worklog.get('tech_email')
@@ -113,25 +113,25 @@ def combine_data(tickets_dict:dict, module_key:str)-> dict:
                     "tech_name": f'{tech_lname}, {tech_fname}',
                     "tech_email": tech_email,
                     "time_spent_ms": time_spent_ms,
-                    "start_time": start_time,
+                    "created_time": start_time,
                     "worklog_ids": [worklog_id],
                     "is_incident" : is_incident
                 }
             else:
                 consolidated_tickets[unique_ticket_id]['time_spent_ms'] += time_spent_ms
                 existing_start_time = datetime.strptime(
-                    consolidated_tickets[unique_ticket_id]['start_time'], "%b %d, %Y %I:%M %p"
+                    consolidated_tickets[unique_ticket_id]['created_time'], "%b %d, %Y %I:%M %p"
                 )
                 new_start_time = datetime.strptime(start_time, "%b %d, %Y %I:%M %p")
                 if new_start_time > existing_start_time:
-                    consolidated_tickets[unique_ticket_id]['start_time'] = start_time
+                    consolidated_tickets[unique_ticket_id]['created_time'] = start_time
 
                 consolidated_tickets[unique_ticket_id]['worklog_ids'].append(worklog_id)
 
     for tickets in consolidated_tickets.values():
         worklog_ids_list = tickets.get('worklog_ids',[])
         worklog_ids_str = str(worklog_ids_list)
-        tickets['worklog_ids_str'] = worklog_ids_str
+        tickets['worklog_id'] = worklog_ids_str
 
     return consolidated_tickets
 
@@ -165,11 +165,29 @@ def main():
         final_worklogs_dict = {}
         for module_key, module_values in worklogs_dict.items():
             combined_data = combine_data(module_values,module_key)
+            logger.info(f"Combined data: {json.dumps(combined_data,indent=4)}")
             logger.info(f"Main: Completed combining data for {module_key}")
             cleaned_data = clean_and_format_data(combined_data, module_key)
+            logger.info(f"Cleaned data: {json.dumps(cleaned_data,indent=4)}")
             logger.info(f"Main: Completed cleaning data for {module_key}")
             final_worklogs_dict.update(cleaned_data)
+        
+        ordered_keys = ['module_id', 'worklog_id', 'created_time', 'minutes',  'tech_name', 'tech_email', 'module', 'hours','Unique_ID']
+        final_worklogs_dict = reformat_item(final_worklogs_dict, ordered_keys)
+        logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
+        sharepoint_connector_o = SharePoint_Connector(logger)
+        logger.info("Main: Getting SharePoint ids and updating cache.")
+        sharepoint_cache = sharepoint_connector_o.get_item_ids('ServiceDesk_Worklogs')
+        logger.info(f"Main: {len(sharepoint_cache)} items retreieved, saving cache.")
+        sharepoint_cache = trim_sharepoint_keys(sharepoint_cache)
+        for item in sharepoint_cache.values():
+            item['Unique_ID'] = item.pop('unique_id')
+        sharepoint_cache = reassign_key(sharepoint_cache, 'Unique_ID')
+        final_worklogs_dict = merge_sharepoint_ids(final_worklogs_dict, sharepoint_cache)
+        current_servicedesk_cache_list[1] = sharepoint_cache
 
+        # logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
+        # logger.info(f"Main: Cleaned, Combined, and SharePoint Dict Values: {json.dumps(sharepoint_cache,indent=4)}")
         cached_info = cache_operation(final_worklogs_dict, current_servicedesk_cache_list)
 
         logger.info(f"Main: Cleaned, Combined, and Cached Dict Values: {json.dumps(cached_info,indent=4)}")
@@ -178,25 +196,14 @@ def main():
             logger.info(f"No changes detected, exiting.")
             return
         
-        sharepoint_connector_o = SharePoint_Connector(logger)
+        
         batch_queue = deque()
 
         batch_queue = sharepoint_connector_o.format_and_batch_for_upload_sharepoint(cached_info[1],'ServiceDesk_Worklogs')
         sharepoint_connector_o.batch_upload(batch_queue)
 
-        logger.info("Main: Getting SharePoint ids and updating cache.")
-
-        sharepoint_list_items = sharepoint_connector_o.get_item_ids('ServiceDesk_Worklogs')
-
-        logger.info(f"Main: {len(sharepoint_list_items)} items retreieved, saving cache.")
-        
-        sharpoint_items_file_path = 'outputs/servicedesk_worklogs.json'
-        write_to_json(sharepoint_list_items,sharpoint_items_file_path)
-
-        logger.info(f"Main: Items saved to {sharpoint_items_file_path}")
 
         logger.info("Main: Updating Cache with SharePoint info")
-        full_cache = update_cache(cached_info,sharepoint_list_items,'unique_id')
         current_iteration = int(dates_dict.get('iteration',0))
         current_iteration += 1
         new_dates = {
@@ -205,8 +212,8 @@ def main():
             'iteration': current_iteration,
             'full_iteration_num': 15
         }
-        full_cache.append(new_dates)
-        write_to_json(full_cache,servicedesk_cache_file_path)
+        cached_info.append(new_dates)
+        write_to_json(cached_info,servicedesk_cache_file_path)
     
         logger.info(f"Main: ETL Completed successfully: Exit Code 0")
         
