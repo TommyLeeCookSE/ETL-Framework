@@ -335,7 +335,9 @@ class SharePoint_Connector(Connector):
                     "asset_serial_no": "asset_serial_no",
                     "warranty_expiry_date": "warranty_expiry_date",
                     "missing_barcode": "missing_barcode",
-                    "missing_annual_replacement_amoun": "missing_annual_replacement_amoun"
+                    "missing_annual_replacement_amoun": "missing_annual_replacement_amoun",
+                    'in_use_date': "in_use_date",
+                    'disposed_date': 'disposed_date'
                 },
                 'unique_id_field': 'Unique_ID',
             },

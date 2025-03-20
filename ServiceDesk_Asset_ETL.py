@@ -76,7 +76,24 @@ def check_asset_status(previous_dict:dict, current_dict:dict) -> dict:
         updated_current_dict (dict): Dict with the updated statuses.
     """
 
+    for key,asset in current_dict.items():
+        current_status = asset.get('state','N/A') or 'N/A'
+        if key in previous_dict:
+            previous_status = previous_dict[key].get('state','N/A') or 'N/A'
+        else:
+            previous_status = 'N/A'
+        previous_in_use_date = asset.get('in_use_date', 'N/A') or 'N/A'
+        previous_disposed_date = asset.get('disposed_date', 'N/A') or 'N/A'
+        
+        if current_status == 'In Use' and previous_status != 'In Use':
+            current_dict[key]['in_use_date'] = datetime.today().strftime('%b %d, %Y')
+        elif current_status == 'Disposed' and previous_status != 'Disposed':
+            current_dict[key]['disposed_date'] = datetime.today().strftime('%b %d, %Y')
+        else:
+            current_dict[key]['in_use_date'] = previous_in_use_date
+            current_dict[key]['disposed_date'] = previous_disposed_date
 
+    return current_dict
 
 def main():
     """
@@ -132,16 +149,17 @@ def main():
         sharepoint_dict_items = sharepoint_connector_o.get_item_ids('ServiceDesk_Assets')
         cleaned_sharepoint_details = trim_sharepoint_keys(sharepoint_dict_items)
 
-
         cleaned_formatted_sharepoint_details = {
             value.get('saas_id'): value
             for value in cleaned_sharepoint_details.values()
         }
+        logger.info(f"Main: Cleaned Sharepoint Details:\n{json.dumps(cleaned_formatted_sharepoint_details,indent=4)}")
+    
         cleaned_asset_details_dict = merge_sharepoint_ids(cleaned_asset_details_dict, cleaned_formatted_sharepoint_details)
-
+        cleaned_asset_details_dict = check_asset_status(cleaned_formatted_sharepoint_details, cleaned_asset_details_dict)
         previous_servicedesk_cache_list[1] = cleaned_formatted_sharepoint_details
 
-        # logger.info(f"Main: Cleaned Sharepoint Details:\n{json.dumps(cleaned_formatted_sharepoint_details,indent=4)}")
+       
         
         #Items are in sharpoint format, now cache and compare checksums
         current_data = cache_operation(cleaned_asset_details_dict,previous_servicedesk_cache_list,logger=logger)
