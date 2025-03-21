@@ -337,7 +337,8 @@ class SharePoint_Connector(Connector):
                     "missing_barcode": "missing_barcode",
                     "missing_annual_replacement_amoun": "missing_annual_replacement_amoun",
                     'in_use_date': "in_use_date",
-                    'disposed_date': 'disposed_date'
+                    'disposed_date': 'disposed_date',
+                    'repl_fund': 'repl_fund'
                 },
                 'unique_id_field': 'Unique_ID',
             },

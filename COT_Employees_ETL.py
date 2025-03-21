@@ -75,6 +75,8 @@ def main():
         cached_sharepoint_items = sharepoint_connector_o.get_item_ids('COT_Employees')
         cached_sharepoint_items = trim_sharepoint_keys(cached_sharepoint_items)
         cached_sharepoint_items = reassign_key(cached_sharepoint_items,'Azure_Id')
+        for user in cached_sharepoint_items.values():
+            user['Unique_ID'] = user.get('Azure_Id')
         logger.info(f"Cached sharepoint items: {json.dumps(cached_sharepoint_items,indent=4)}")
 
         #Sets up azure connector

@@ -57,6 +57,7 @@ def clean_servicedesk_asset_details(raw_dict: dict) -> dict:
             "asset_manu": value.get("product", {}).get("manufacturer","N/A") or "N/A",
             "asset_serial_no": value.get("serial_number","N/A") or "N/A",
             "warranty_expiry_date": (expiry.get('display_value', "Jan 01, 1970") if (expiry := value.get('warranty_expiry')) else "Jan 01, 1970"),
+            'repl_fund': 'Yes' if value.get("udf_fields", {}).get("txt_repl_fund","No") else "No",
             "Unique_ID": value.get('name',"N/A")
         }
         for key,value in raw_dict.items()
@@ -82,8 +83,12 @@ def check_asset_status(previous_dict:dict, current_dict:dict) -> dict:
             previous_status = previous_dict[key].get('state','N/A') or 'N/A'
         else:
             previous_status = 'N/A'
-        previous_in_use_date = asset.get('in_use_date', 'N/A') or 'N/A'
-        previous_disposed_date = asset.get('disposed_date', 'N/A') or 'N/A'
+        previous_in_use_date = previous_dict.get('in_use_date', "Jan 01, 1970") or "Jan 01, 1970"
+        previous_disposed_date = previous_dict.get('disposed_date', "Jan 01, 1970") or "Jan 01, 1970"
+        if previous_in_use_date == 'N/A':
+            previous_in_use_date = "Jan 01, 1970"
+        if previous_disposed_date == 'N/A':
+            previous_disposed_date = "Jan 01, 1970"
         
         if current_status == 'In Use' and previous_status != 'In Use':
             current_dict[key]['in_use_date'] = datetime.today().strftime('%b %d, %Y')
@@ -130,7 +135,7 @@ def main():
         logger.info(f"Main: Retrieved {len(raw_asset_details_dict)} items.")
         logger.info(f"Main: Raw details: {json.dumps(raw_asset_details_dict,indent=4)}")
         cleaned_asset_details_dict = clean_servicedesk_asset_details(raw_asset_details_dict)
-        logger.info(f"Main: Cleaned asset details:\n{json.dumps(cleaned_asset_details_dict,indent=4)}")
+        # logger.info(f"Main: Cleaned asset details:\n{json.dumps(cleaned_asset_details_dict,indent=4)}")
 
         for item in cleaned_asset_details_dict.values():
             barcode = item.get('barcode')
@@ -144,20 +149,23 @@ def main():
                 item['missing_annual_replacement_amoun'] = 'Y'
             else:
                 item['missing_annual_replacement_amoun'] = 'N'
+        ordered_keys = ['name', 'type', 'state', 'department', 'asset_description', 'asset_assigned_user', 'asset_assigned_user_dept', 'asset_assigned_user_email',
+                        'saas_id', 'created_date', 'last_updated_date', 'total_cost', 'lifecycle', 'barcode', 'depreciation_salvage_value', 'depreciation_useful_life',
+                        'ip_address', 'replaced_serial_number', 'service_request', 'imei_number', 'cellular_provider', 'replacement_fund', 'replacement_date', 'annual_replacement_amt',
+                        'acquisition_date', 'asset_vendor_name', 'asset_purchase_cost', 'asset_product_type', 'asset_category', 'asset_manu', 'asset_serial_no', 
+                        'warranty_expiry_date', 'missing_barcode', 'missing_annual_replacement_amoun', 'in_use_date', 'disposed_date', 'repl_fund']
+        cleaned_asset_details_dict = reformat_item(cleaned_asset_details_dict, ordered_keys)
 
         sharepoint_connector_o = SharePoint_Connector(logger)
         sharepoint_dict_items = sharepoint_connector_o.get_item_ids('ServiceDesk_Assets')
         cleaned_sharepoint_details = trim_sharepoint_keys(sharepoint_dict_items)
+        cleaned_sharepoint_details = reassign_key(cleaned_sharepoint_details, 'saas_id')
 
-        cleaned_formatted_sharepoint_details = {
-            value.get('saas_id'): value
-            for value in cleaned_sharepoint_details.values()
-        }
-        logger.info(f"Main: Cleaned Sharepoint Details:\n{json.dumps(cleaned_formatted_sharepoint_details,indent=4)}")
+        logger.info(f"Main: Cleaned Sharepoint Details:\n{json.dumps(cleaned_sharepoint_details,indent=4)}")
     
-        cleaned_asset_details_dict = merge_sharepoint_ids(cleaned_asset_details_dict, cleaned_formatted_sharepoint_details)
-        cleaned_asset_details_dict = check_asset_status(cleaned_formatted_sharepoint_details, cleaned_asset_details_dict)
-        previous_servicedesk_cache_list[1] = cleaned_formatted_sharepoint_details
+        cleaned_asset_details_dict = merge_sharepoint_ids(cleaned_asset_details_dict, cleaned_sharepoint_details)
+        cleaned_asset_details_dict = check_asset_status(cleaned_sharepoint_details, cleaned_asset_details_dict)
+        previous_servicedesk_cache_list[1] = cleaned_sharepoint_details
 
        
         
@@ -169,26 +177,29 @@ def main():
             return
         else:
             logger.info("Main: Changes detected in checksum, checking changes.")
+            for asset in current_data[1].values():
+                saas_id = asset.get('saas_id')
+                asset['Unique_ID'] = saas_id
             logger.info(f"Main: Cache Details:\n{json.dumps(current_data,indent=4)}")
 
 
-        logger.info("Main: Formatting and batching for upload.")
-        batched_queue=sharepoint_connector_o.format_and_batch_for_upload_sharepoint(current_data[1],"ServiceDesk_Assets")
-        logger.info(f"Main: Formatted and batched {len(batched_queue)} items for SharePoint")
-        logger.info(f"Main: Uploading {len(batched_queue)} batches to SharePoint.")
+        # logger.info("Main: Formatting and batching for upload.")
+        # batched_queue=sharepoint_connector_o.format_and_batch_for_upload_sharepoint(current_data[1],"ServiceDesk_Assets")
+        # logger.info(f"Main: Formatted and batched {len(batched_queue)} items for SharePoint")
+        # logger.info(f"Main: Uploading {len(batched_queue)} batches to SharePoint.")
 
-        sharepoint_connector_o.batch_upload(batched_queue)
-        logger.info("Main: Uploaded items to SharePoint.")
+        # sharepoint_connector_o.batch_upload(batched_queue)
+        # logger.info("Main: Uploaded items to SharePoint.")
 
         
 
-        logger.info("Main: Updating Cache with SharePoint info")
-        new_dates = {
-            'current_time_epoch_ms' : int(time.time()*1000),
-            'date_last_checked_str' : datetime.now().strftime(("%m/%d/%Y %H:%M"))
-        }
-        current_data.append(new_dates)
-        write_to_json(current_data,servicedesk_cache_file_path)
+        # logger.info("Main: Updating Cache with SharePoint info")
+        # new_dates = {
+        #     'current_time_epoch_ms' : int(time.time()*1000),
+        #     'date_last_checked_str' : datetime.now().strftime(("%m/%d/%Y %H:%M"))
+        # }
+        # current_data.append(new_dates)
+        # write_to_json(current_data,servicedesk_cache_file_path)
     
         logger.info(f"Main: ETL Completed successfully: Exit Code 0")
     except Exception as e:

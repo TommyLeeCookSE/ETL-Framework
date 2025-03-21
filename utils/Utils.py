@@ -138,6 +138,7 @@ def check_changes(previous_list: list, current_list: list, delete, logger) -> li
         if prev_key not in current_dict:
             #If key is in previous cache but not in current cache
             current_dict[prev_key] = {}
+            current_dict[prev_key] = prev_value
             current_dict[prev_key]['operation'] = delete_op
             current_dict[prev_key]['Unique_ID'] = prev_value.get('Unique_ID')
             current_dict[prev_key]['sharepoint_id'] = prev_value.get('sharepoint_id', '')

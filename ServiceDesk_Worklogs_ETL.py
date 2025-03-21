@@ -175,6 +175,7 @@ def main():
         ordered_keys = ['module_id', 'worklog_id', 'created_time', 'minutes',  'tech_name', 'tech_email', 'module', 'hours','Unique_ID']
         final_worklogs_dict = reformat_item(final_worklogs_dict, ordered_keys)
         logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
+        
         sharepoint_connector_o = SharePoint_Connector(logger)
         logger.info("Main: Getting SharePoint ids and updating cache.")
         sharepoint_cache = sharepoint_connector_o.get_item_ids('ServiceDesk_Worklogs')
