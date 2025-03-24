@@ -15,7 +15,7 @@ class ServiceDesk_Connector(Connector):
             "Content-Type": "application/x-www-form-urlencoded" 
         }
 
-    def build_servicedesk_asset_data(self, change_item:dict)->str:
+    def build_servicedesk_asset_data(self, change_item:dict, module_name)->str:
         """
         Takes in a dict that holds the item that needs to be formatted for ServiceDesk.
         Item will be formattedb based off of user type then converted to a f-string and returned.
@@ -25,33 +25,42 @@ class ServiceDesk_Connector(Connector):
         Returns:
             formatted_item (str): Formatted f-string of the change_item.
         """
-
-        asset_data = {
-            "asset": {
-                "serial_number": change_item.get("Serial_Number", ""),
-                "barcode": int(change_item.get("Barcode", "0")) if change_item.get("Barcode") else "",
-                "udf_fields": {
-                    "udf_char8": int(change_item.get("Request_Number", "0")) if change_item.get("Request_Number") else "",
-                    "udf_char7": change_item.get("Replaced_Serial_Number", "")
-                },
-                "department": {
-                    "name" : change_item.get('User_Department') 
-                },
-                "state": {
-                    "name": "In Use"
+        if module_name == 'asset_upload':
+            asset_data = {
+                "asset": {
+                    "serial_number": change_item.get("Serial_Number", ""),
+                    "barcode": int(change_item.get("Barcode", "0")) if change_item.get("Barcode") else "",
+                    "udf_fields": {
+                        "udf_char8": int(change_item.get("Request_Number", "0")) if change_item.get("Request_Number") else "",
+                        "udf_char7": change_item.get("Replaced_Serial_Number", "")
+                    },
+                    "department": {
+                        "name" : change_item.get('User_Department') 
+                    },
+                    "state": {
+                        "name": "In Use"
+                    }
                 }
             }
-        }
 
-        user_type = change_item.get('User_Type',"")
+            user_type = change_item.get('User_Type',"")
 
-        if user_type == 'User':
-            asset_data['asset']['user'] = {
-                'name': change_item.get('User_Name',''),
-                'email_id': change_item.get('User','')
+            if user_type == 'User':
+                asset_data['asset']['user'] = {
+                    'name': change_item.get('User_Name',''),
+                    'email_id': change_item.get('User','')
+                }
+            elif user_type == 'Shared Device':
+                asset_data['asset']['location'] = change_item.get('User_Location')
+
+        elif module_name == 'repl_fund':
+            asset_data = {
+                "asset": {
+                    "udf_fields": {
+                        'txt_repl_fund' : [change_item.get('txt_repl_fund')]
+                    }
+                }
             }
-        elif user_type == 'Shared Device':
-            asset_data['asset']['location'] = change_item.get('User_Location')
 
         formatted_item = json.dumps(asset_data,indent=4)
         self.logger.info(f"Build_Asset_Data: Asset Data: {formatted_item}")
@@ -73,7 +82,7 @@ class ServiceDesk_Connector(Connector):
         formatted_deque = deque()
         for key,item in change_dict.items():
             if module_name == "asset_upload":
-                input_data = self.build_servicedesk_asset_data(item)
+                input_data = self.build_servicedesk_asset_data(item, module_name)
 
                 input_dict = {
                     'serial_number': item.get('Serial_Number',''),
@@ -81,6 +90,14 @@ class ServiceDesk_Connector(Connector):
                     'input_data': input_data,
                     'sharepoint_id': key,
                     }
+                
+            elif module_name == "repl_fund":
+                input_data = self.build_servicedesk_asset_data(item, module_name)
+                input_dict = {
+                    'asset_id' : key,
+                    'input_data' : input_data,
+                    'sharepoint_id' : None
+                }
             
             self.logger.info(f"Format_and_Batch: Formatted item: {input_dict}")
             formatted_deque.append(input_dict)
@@ -103,8 +120,9 @@ class ServiceDesk_Connector(Connector):
 
         response_list = []
         counter = 1
+        num_items = len(formatted_deque)
         while formatted_deque:
-            self.logger.info(f"Upload_to_Servicedesk: ({counter}/{len(formatted_deque)}) Items to upload to ServiceDesk.")
+            self.logger.info(f"Upload_to_Servicedesk: ({counter}/{num_items}) Items to upload to ServiceDesk.")
             upload_item = formatted_deque.pop()
             self.logger.debug(f"Upload_to_Servicedesk: Uploading item: {upload_item}")
 

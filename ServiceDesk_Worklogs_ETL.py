@@ -151,7 +151,7 @@ def main():
         if iteration_type == 'full_sync':
             num_pages = 1000
         else:
-            num_pages = 2
+            num_pages = 1
         servicedesk_connector_o = ServiceDesk_Connector(logger)
         
         module_list = ['requests','projects','problems','changes','releases']
