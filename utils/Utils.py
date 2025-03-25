@@ -309,6 +309,20 @@ def sort_dicts(unsorted_dict:dict)-> dict:
     
     return sorted_dict
 
+def assign_unique_id(current_dict:dict, unique_id_key:str) -> dict:
+    """
+    Takes in dict and a unique_id_key, assigns a new key in each dict with the unique_id_key.
+
+    Args:
+        current_dict (dict): Current data dict.
+        unique_id_key (str): Str to be used to find and assign the unique key
+    """
+
+    for key,value in current_dict.items():
+        current_dict[key]['Unique_ID'] = value[unique_id_key]
+    
+    return current_dict
+
 def reformat_dict(unformatted_sp_dict: dict, raw_data_dict: dict, unique_id_key: str) -> dict:
     """
     Takes in an unformatted dict from SharePoint, trims the excess keys, reassigns the unique_id to match the format of the raw data,
@@ -325,9 +339,11 @@ def reformat_dict(unformatted_sp_dict: dict, raw_data_dict: dict, unique_id_key:
 
     formatted_sp_dict = trim_sharepoint_keys(unformatted_sp_dict)
     formatted_sp_dict = reassign_key(formatted_sp_dict, unique_id_key)
+    formatted_sp_dict = assign_unique_id(formatted_sp_dict, unique_id_key)
     formatted_sp_dict = sort_dicts(formatted_sp_dict)
 
     formatted_dict = merge_sharepoint_ids(raw_data_dict, formatted_sp_dict)
+    formatted_dict = assign_unique_id(formatted_dict, unique_id_key)
     formatted_dict = sort_dicts(formatted_dict)
 
     return formatted_dict, formatted_sp_dict

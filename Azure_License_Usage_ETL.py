@@ -33,8 +33,8 @@ def main():
         # logger.info(f"SharePoint values: {json.dumps(cached_info,indent=4)}")
 
         formatted_licenses_dict, formatted_cached_dict = reformat_dict(cached_info, licenses_dict, 'sku_id')
-        # logger.info(json.dumps(formatted_licenses_dict,indent=4))
-        # logger.info(json.dumps(formatted_cached_dict,indent=4))
+        logger.info(json.dumps(formatted_licenses_dict,indent=4))
+        logger.info(json.dumps(formatted_cached_dict,indent=4))
 
         cached_list = read_from_json(cache_file_path)
         cached_list[1] = formatted_cached_dict
@@ -50,7 +50,7 @@ def main():
         else:
             logger.info("Changes detected in checksum, checking changes.")
 
-        formatted_deque = sharepoint_connector_o.format_and_batch_for_upload_sharepoint(licenses_dict, 'INFAzureLicenseUsage')
+        formatted_deque = sharepoint_connector_o.format_and_batch_for_upload_sharepoint(cache_response[1], 'INFAzureLicenseUsage')
         logger.info(f"Main: Formatted and batched {len(formatted_deque)} items for SharePoint")
         logger.info(f"Main: Uploading {len(formatted_deque)} batches to SharePoint.")
 

@@ -71,18 +71,7 @@ def main():
         logger.info(f"{script_name} executed, getting user information and license information.")
         logger.info(f"Initializing Azure Connector and retirieving Access Token.")
 
-        sharepoint_connector_o = SharePoint_Connector(logger)
-        cached_sharepoint_items = sharepoint_connector_o.get_item_ids('COT_Employees')
-        cached_sharepoint_items = trim_sharepoint_keys(cached_sharepoint_items)
-        cached_sharepoint_items = reassign_key(cached_sharepoint_items,'Azure_Id')
-        for user in cached_sharepoint_items.values():
-            user['Unique_ID'] = user.get('Azure_Id')
-        logger.info(f"Cached sharepoint items: {json.dumps(cached_sharepoint_items,indent=4)}")
-
-        #Sets up azure connector
         azure_connector_o = Azure_Connector(logger)
-
-        #Gets user info and license info
         azure_user_info_dict = azure_connector_o.get_users_info()
 
         #Fixes the licenses to the M365 Licenses list per Michael's requests.
@@ -100,10 +89,16 @@ def main():
                 value['accountEnabled'] = str(value['accountEnabled'])
             else:
                 value['accountEnabled'] = "False"
-
+        
         azure_user_info_dict = clean_items(azure_user_info_dict)
-        azure_user_info_dict = merge_sharepoint_ids(azure_user_info_dict, cached_sharepoint_items)
+        # logger.info(f"Data: {json.dumps(azure_user_info_dict,indent=4)}")
+        
+        sharepoint_connector_o = SharePoint_Connector(logger)
+        cached_sharepoint_items = sharepoint_connector_o.get_item_ids('COT_Employees')
+        # logger.info(f"SP: {json.dumps(cached_sharepoint_items,indent=4)}")
 
+        azure_user_info_dict, cached_sharepoint_items = reformat_dict(cached_sharepoint_items, azure_user_info_dict, 'Azure_Id')
+        
         previous_azure_user_info_list = read_from_json(cache_file_path)
         previous_azure_user_info_list[1] = cached_sharepoint_items
         current_data = cache_operation(azure_user_info_dict, previous_azure_user_info_list, delete=True, logger=logger)
@@ -115,6 +110,7 @@ def main():
             return
         else:
             logger.info("Changes detected in checksum, checking changes.")
+            logger.info(json.dumps(current_data,indent=4))
 
         for value in current_data[1].values():
             licenses_data_type = 'Collection(Edm.String)'

@@ -136,7 +136,7 @@ def calculate_balance(po_dict:dict) -> None:
     """
     po_dict['Balance'] = round(po_dict['PO_Amount'] - po_dict['Expense'], 2)
     balance_remaining_percent = po_dict['Balance'] / po_dict['PO_Amount']
-    po_dict['Less_Than_25_Remaining'] = 'X' if balance_remaining_percent <= 0.25 else ' '
+    po_dict['Less_Than_25_Remaining'] = 'X' if balance_remaining_percent <= 0.25 else 'N/A'
 
 def check_expiry(po_dict:dict)-> None:
     """
@@ -203,8 +203,43 @@ def unique_key_generator(po_dict:dict) -> None:
     """
     po_dict['Unique_ID'] = str(str(po_dict['PO_Number']) + str(po_dict['Purchase_Request_Id']))
 
+def convert_to_dict(po_list:list) -> dict:
+    """
+    Takes in a list and converts it to a dict.
+    Args:
+        po_list (list): List of po_info
+    Returns:
+        po_dict (dict): Dict of po_info
+    """
+    po_dict = {}
+    for item in po_list:
+            key = item.get('Unique_ID')
+            po_dict[key] = item
+
+    return po_dict
+
+def remove_blanks(po_dict:dict)->dict:
+    """
+    Takes in a dict and iterates over each dict inside, changes blankes to N/A.
+    Args:
+        po_dict(dict): Dict of dicts containing PO info.
+    Returns:
+        po-dict(dict): Dict of dicts containging cleaned PO Info.
+    """
+
+    for outerkey, inner_dict in po_dict.items():
+        for inner_key, value in inner_dict.items():
+            if value in [None, ' ', '']:
+                if 'Date' in inner_key:
+                    po_dict[outerkey][inner_key] = "1900-01-01"
+                else:
+                    po_dict[outerkey][inner_key] = 'N/A'
+                
+    
+    return po_dict
 def main():
     try:
+        cache_file_path = r"cache/po_info_cache.json"
         script_name = Path(__file__).stem
         logger = setup_logger(script_name)
 
@@ -212,39 +247,21 @@ def main():
         logger.info(f"{script_name} executed, getting SQL Data.")
 
         raw_sql = extract_po_information(logger)
-        raw_po_info = clean_values(raw_sql,logger)
-        formatted_po_info = save_po_information(raw_po_info, logger)
-
-        transform_data(formatted_po_info, logger)
-
-        logger.info(f"Converting {len(formatted_po_info)} items to key:value dict.")
-        po_dict = {}
-        for item in formatted_po_info:
-            po_dict[item['Unique_ID']] = item
-        
-        ordered_keys = [
-            'Title', 'PO_Type', 'PO_Number', 'Vendor_Name', 'Description', 'PO_Amount', 'Expense', 'Balance', 'Expiration_Date',
-            'Expired', 'Less_Than_90_Days_Till_Expired', 'Less_Than_60_Days_Till_Expired', 'Less_Than_30_Days_Till_Expired',
-            'Contingency_Description', 'Contingency_Amount', 'Contingency_Used', 'Contingency_Balance', 'Last_Month_Update',
-            'Last_Month_Updated_By', 'Last_Month_Update_Date', 'This_Month_Update', 'This_Month_Updated_By', 'This_Month_Update_Date',
-            'Less_Than_25_Remaining', 'Unique_ID'
-        ]
-        po_dict = reformat_item(po_dict,ordered_keys)
-        
-        cache_file_path = r"cache/po_info_cache.json"
-        previous_cache = read_from_json(cache_file_path)
-
+        raw_po_info_list = clean_values(raw_sql,logger)
+        formatted_po_info_list = save_po_information(raw_po_info_list, logger)
+        formatted_po_info_list = transform_data(formatted_po_info_list, logger)
+        formatted_po_info = convert_to_dict(formatted_po_info_list)
+        formatted_po_info = remove_blanks(formatted_po_info)
+        logger.info(json.dumps(formatted_po_info,indent=4))
         sharepoint_connector_o = SharePoint_Connector(logger)
         cached_sharepoint_items = sharepoint_connector_o.get_item_ids('NewWorld_PO_Alert')
-        cached_sharepoint_items = trim_sharepoint_keys(cached_sharepoint_items)
-        cached_sharepoint_items = reassign_key(cached_sharepoint_items, 'Unique_ID')
-        previous_cache[1] = cached_sharepoint_items
-        # logger.info(f"Cached sharepoint items: {json.dumps(cached_sharepoint_items,indent=4)}")
-        logger.info(f"PO_Dict: {json.dumps(po_dict,indent=4)}")
+
+        formatted_po_info, formatted_sharepoint_dict = reformat_dict(cached_sharepoint_items,formatted_po_info, 'Unique_ID')
 
         logger.info("Begining caching operations.")
-        po_dict = merge_sharepoint_ids(po_dict,cached_sharepoint_items)
-        current_data = cache_operation(po_dict, previous_cache, delete=True, logger=logger)
+        previous_cache = read_from_json(cache_file_path)
+        previous_cache[1] = formatted_sharepoint_dict
+        current_data = cache_operation(formatted_po_info, previous_cache, delete=True, logger=logger)
         
         status = current_data[2].get('status')
         if status == 'exit':
@@ -266,7 +283,7 @@ def main():
         logger.info("Updating Cache with SharePoint info")
         write_to_json(current_data,cache_file_path)
         
-        # logger.info(f"ETL Completed successfully: Exit Code 0")
+        logger.info(f"ETL Completed successfully: Exit Code 0")
     except Exception as e:
         logger.error(f"Error occured in main: {e}: Exit Code 1")
         logger.error("Traceback:", exc_info=True)
