@@ -127,3 +127,54 @@ class Azure_Connector(Connector):
                     self.logger.error(f"Failed to get licenses: {response.status_code} : {json.dumps(response.json(),indent=4)}")
                     break
         self.logger.info("Retrieved Azure User License Info.")
+
+    def get_license_usage(self):
+        """
+        Gets Azure User Info and saves to a dict with the Azure ID as they key.
+        """
+        self.logger.info("Getting Azure License Info...")
+        url = "https://graph.microsoft.com/v1.0/subscribedSkus"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        all_license_lists = []
+
+        while url:
+            response = requests.get(url, headers=headers)
+
+            if response.status_code==200:
+                data = response.json()
+                all_license_lists.extend(data['value'])
+                self.logger.info(f"Added {len(data['value'])} users, total users: {len(all_license_lists)}")
+                url = data.get('@odata.nextLink', None)
+            elif response.status_code == 401:
+                self.logger.warning("401 Unauthorized. Refreshing access token.")
+                self.access_token = self.get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {self.access_token}",
+                    "Content-Type": "application/json"
+                }
+            else:
+                self.logger.error(f"Failed to connect: {response.status_code}: {json.dumps(response.json(),indent=4)}")
+                break
+
+        all_license_dict = {}
+        for license in all_license_lists:
+            sku_id = license.get('skuId')
+            sku_name = license.get('skuPartNumber','N/A') or 'N/A'
+            consumed_num = license.get('consumedUnits',0) or 0
+            total_num = license.get('prepaidUnits',{}).get('enabled',0) or 0
+            remaining_num = total_num - consumed_num
+
+            all_license_dict[sku_id] = {
+                'sku_id' : sku_id,
+                'sku_name' : sku_name,
+                'consumed_licenses' : consumed_num,
+                'remaining_licenses' : remaining_num,
+                'total_licenses': total_num 
+            }
+
+        self.logger.info("Retrieved Azure License Info.")
+
+        return all_license_dict

@@ -356,6 +356,16 @@ class SharePoint_Connector(Connector):
                 },
                 'unique_id_field': 'Unique_ID',
             },
+            'INFAzureLicenseUsage' : {
+                'fields': {
+                    'sku_id': 'sku_id',
+                    'sku_name': 'sku_name',
+                    'total_licenses': 'total_licenses',
+                    'consumed_licenses': 'consumed_licenses',
+                    'remaining_licenses': 'remaining_licenses'
+                },
+                'unique_id_field': 'Unique_ID',
+            }
 
         }
 

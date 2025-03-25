@@ -293,3 +293,41 @@ def reformat_item(unformatted_dict: dict, ordered_keys: list) -> dict:
                 formatted_dict[key][wanted_key] = value if value not in [None, ""," "] else "N/A"
 
     return formatted_dict            
+
+def sort_dicts(unsorted_dict:dict)-> dict:
+    """
+    Takes in an unsorted dict of dicts and returns a sorted inner and outer dict.
+    
+    Args:
+        unsorted_dict: Nested unsorted dict.
+    Returns:
+        sorted_dict: Sorted nested dict.
+    """
+    sorted_dict = dict(sorted(unsorted_dict.items()))
+    for key, value in sorted_dict.items():
+        sorted_dict[key] = dict(sorted(value.items()))
+    
+    return sorted_dict
+
+def reformat_dict(unformatted_sp_dict: dict, raw_data_dict: dict, unique_id_key: str) -> dict:
+    """
+    Takes in an unformatted dict from SharePoint, trims the excess keys, reassigns the unique_id to match the format of the raw data,
+    merges sharepoint_ids, then sorts the inner and outer dicts to allow caching.
+
+    Args:
+        unformatted_sp_dict (dict): Raw data from SharePoint.
+        raw_data_dict (dict): Data raw from the source.
+        unique_id_key (str): Str used to reassign the keys of the dict.
+    Returns:
+        formatted_dict (dict): Formatted, merged, and sorted dict.
+        formatted_sp_dict (dict): Formatted, reasssigned, trimmed, sharepoint dict.
+    """
+
+    formatted_sp_dict = trim_sharepoint_keys(unformatted_sp_dict)
+    formatted_sp_dict = reassign_key(formatted_sp_dict, unique_id_key)
+    formatted_sp_dict = sort_dicts(formatted_sp_dict)
+
+    formatted_dict = merge_sharepoint_ids(raw_data_dict, formatted_sp_dict)
+    formatted_dict = sort_dicts(formatted_dict)
+
+    return formatted_dict, formatted_sp_dict

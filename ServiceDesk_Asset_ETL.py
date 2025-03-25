@@ -183,23 +183,23 @@ def main():
             logger.info(f"Main: Cache Details:\n{json.dumps(current_data,indent=4)}")
 
 
-        # logger.info("Main: Formatting and batching for upload.")
-        # batched_queue=sharepoint_connector_o.format_and_batch_for_upload_sharepoint(current_data[1],"ServiceDesk_Assets")
-        # logger.info(f"Main: Formatted and batched {len(batched_queue)} items for SharePoint")
-        # logger.info(f"Main: Uploading {len(batched_queue)} batches to SharePoint.")
+        logger.info("Main: Formatting and batching for upload.")
+        batched_queue=sharepoint_connector_o.format_and_batch_for_upload_sharepoint(current_data[1],"ServiceDesk_Assets")
+        logger.info(f"Main: Formatted and batched {len(batched_queue)} items for SharePoint")
+        logger.info(f"Main: Uploading {len(batched_queue)} batches to SharePoint.")
 
-        # sharepoint_connector_o.batch_upload(batched_queue)
-        # logger.info("Main: Uploaded items to SharePoint.")
+        sharepoint_connector_o.batch_upload(batched_queue)
+        logger.info("Main: Uploaded items to SharePoint.")
 
         
 
-        # logger.info("Main: Updating Cache with SharePoint info")
-        # new_dates = {
-        #     'current_time_epoch_ms' : int(time.time()*1000),
-        #     'date_last_checked_str' : datetime.now().strftime(("%m/%d/%Y %H:%M"))
-        # }
-        # current_data.append(new_dates)
-        # write_to_json(current_data,servicedesk_cache_file_path)
+        logger.info("Main: Updating Cache with SharePoint info")
+        new_dates = {
+            'current_time_epoch_ms' : int(time.time()*1000),
+            'date_last_checked_str' : datetime.now().strftime(("%m/%d/%Y %H:%M"))
+        }
+        current_data.append(new_dates)
+        write_to_json(current_data,servicedesk_cache_file_path)
     
         logger.info(f"Main: ETL Completed successfully: Exit Code 0")
     except Exception as e:
