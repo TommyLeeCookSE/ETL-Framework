@@ -149,27 +149,15 @@ def main():
                 item['missing_annual_replacement_amoun'] = 'Y'
             else:
                 item['missing_annual_replacement_amoun'] = 'N'
-        ordered_keys = ['name', 'type', 'state', 'department', 'asset_description', 'asset_assigned_user', 'asset_assigned_user_dept', 'asset_assigned_user_email',
-                        'saas_id', 'created_date', 'last_updated_date', 'total_cost', 'lifecycle', 'barcode', 'depreciation_salvage_value', 'depreciation_useful_life',
-                        'ip_address', 'replaced_serial_number', 'service_request', 'imei_number', 'cellular_provider', 'replacement_fund', 'replacement_date', 'annual_replacement_amt',
-                        'acquisition_date', 'asset_vendor_name', 'asset_purchase_cost', 'asset_product_type', 'asset_category', 'asset_manu', 'asset_serial_no', 
-                        'warranty_expiry_date', 'missing_barcode', 'missing_annual_replacement_amoun', 'in_use_date', 'disposed_date', 'repl_fund']
-        cleaned_asset_details_dict = reformat_item(cleaned_asset_details_dict, ordered_keys)
 
         sharepoint_connector_o = SharePoint_Connector(logger)
         sharepoint_dict_items = sharepoint_connector_o.get_item_ids('ServiceDesk_Assets')
-        cleaned_sharepoint_details = trim_sharepoint_keys(sharepoint_dict_items)
-        cleaned_sharepoint_details = reassign_key(cleaned_sharepoint_details, 'saas_id')
 
-        logger.info(f"Main: Cleaned Sharepoint Details:\n{json.dumps(cleaned_sharepoint_details,indent=4)}")
-    
-        cleaned_asset_details_dict = merge_sharepoint_ids(cleaned_asset_details_dict, cleaned_sharepoint_details)
+        cleaned_asset_details_dict, cleaned_sharepoint_details = reformat_dict(sharepoint_dict_items, cleaned_asset_details_dict, 'saas_id')
         cleaned_asset_details_dict = check_asset_status(cleaned_sharepoint_details, cleaned_asset_details_dict)
+        
         previous_servicedesk_cache_list[1] = cleaned_sharepoint_details
 
-       
-        
-        #Items are in sharpoint format, now cache and compare checksums
         current_data = cache_operation(cleaned_asset_details_dict,previous_servicedesk_cache_list,logger=logger)
         status = current_data[2].get('status')
         if status == 'exit':
