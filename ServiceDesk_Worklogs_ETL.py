@@ -59,8 +59,8 @@ def clean_and_format_data(worklogs_dict:dict, module_key:str) -> dict:
         module_url = f"https://servicedesk.torranceca.gov/app/itdesk/ui/{module_key}/{module_id}/details" if module_key != "changes" else f"https://servicedesk.torranceca.gov/app/itdesk/ChangeDetails.cc?CHANGEID={module_id}&selectTab=close&subTab=details"
         local_module_key = "incident" if is_incident else module_key
 
-        ticket['minutes'] = time_spent_minutes
-        ticket['hours'] = time_spent_hours
+        ticket['minutes'] = round(time_spent_minutes,2)
+        ticket['hours'] = round(time_spent_hours,2)
         ticket['formatted_start_time'] = formatted_start_time
         ticket['module'] = local_module_key
         ticket['module_id'] = module_url
@@ -111,7 +111,7 @@ def combine_data(tickets_dict:dict, module_key:str)-> dict:
                     "Unique_ID": unique_ticket_id,
                     "module_id": module_id,
                     "tech_name": f'{tech_lname}, {tech_fname}',
-                    "tech_email": tech_email,
+                    "tech_email": tech_email or 'N/A',
                     "time_spent_ms": time_spent_ms,
                     "created_time": start_time,
                     "worklog_ids": [worklog_id],
@@ -134,6 +134,25 @@ def combine_data(tickets_dict:dict, module_key:str)-> dict:
         tickets['worklog_id'] = worklog_ids_str
 
     return consolidated_tickets
+
+def trim_keys(worklogs_dict:dict)-> dict:
+    """
+    Takes in a worlogs dict and removes keys not required.
+    Args:
+        worklogs_dict (dict): Dict containg worklogs.
+    Return:
+        cleaned_worklogs_dict (doct): Dict containg worklogs with only keys required.
+    """
+
+    required_keys = ['Unique_ID', 'module', 'created_time', 'hours', 'minutes', 'module_id', 'tech_email', 'tech_name', 'worklog_id']
+    cleaned_worklogs_dict = {}
+    for outerkey, worklog in worklogs_dict.items():
+        cleaned_worklogs_dict[outerkey] = {}
+        for innerkey, value in worklog.items():
+            if innerkey in required_keys:
+                cleaned_worklogs_dict[outerkey][innerkey] = value
+    
+    return cleaned_worklogs_dict
 
 def main():
     try:
@@ -160,36 +179,32 @@ def main():
         for module_key in worklogs_dict:
             worklogs_dict[module_key] = servicedesk_connector_o.get_worklogs_from_servicedesk(module_key,num_pages)
             logger.info(f"Main: Completed retrieving worklogs for {module_key}")
-        logger.info(f"Main: Raw Dict Values: {json.dumps(worklogs_dict,indent=4)}")
+        # logger.info(f"Main: Raw Dict Values: {json.dumps(worklogs_dict,indent=4)}")
 
         final_worklogs_dict = {}
         for module_key, module_values in worklogs_dict.items():
             combined_data = combine_data(module_values,module_key)
-            logger.info(f"Combined data: {json.dumps(combined_data,indent=4)}")
+            # logger.info(f"Combined data: {json.dumps(combined_data,indent=4)}")
             logger.info(f"Main: Completed combining data for {module_key}")
             cleaned_data = clean_and_format_data(combined_data, module_key)
-            logger.info(f"Cleaned data: {json.dumps(cleaned_data,indent=4)}")
+            # logger.info(f"Cleaned data: {json.dumps(cleaned_data,indent=4)}")
+            cleaned_data = trim_keys(cleaned_data)
             logger.info(f"Main: Completed cleaning data for {module_key}")
             final_worklogs_dict.update(cleaned_data)
         
-        ordered_keys = ['module_id', 'worklog_id', 'created_time', 'minutes',  'tech_name', 'tech_email', 'module', 'hours','Unique_ID']
-        final_worklogs_dict = reformat_item(final_worklogs_dict, ordered_keys)
-        logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
         
         sharepoint_connector_o = SharePoint_Connector(logger)
         logger.info("Main: Getting SharePoint ids and updating cache.")
         sharepoint_cache = sharepoint_connector_o.get_item_ids('ServiceDesk_Worklogs')
-        logger.info(f"Main: {len(sharepoint_cache)} items retreieved, saving cache.")
-        sharepoint_cache = trim_sharepoint_keys(sharepoint_cache)
         for item in sharepoint_cache.values():
             item['Unique_ID'] = item.pop('unique_id')
-        sharepoint_cache = reassign_key(sharepoint_cache, 'Unique_ID')
-        final_worklogs_dict = merge_sharepoint_ids(final_worklogs_dict, sharepoint_cache)
+        logger.info(f"Main: {len(sharepoint_cache)} items retreieved, saving cache.")
+        final_worklogs_dict, sharepoint_cache = reformat_dict(sharepoint_cache, final_worklogs_dict, 'Unique_ID')
         current_servicedesk_cache_list[1] = sharepoint_cache
 
-        # logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
-        # logger.info(f"Main: Cleaned, Combined, and SharePoint Dict Values: {json.dumps(sharepoint_cache,indent=4)}")
-        cached_info = cache_operation(final_worklogs_dict, current_servicedesk_cache_list)
+        logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
+        logger.info(f"Main: Cleaned, Combined, and SharePoint Dict Values: {json.dumps(sharepoint_cache,indent=4)}")
+        cached_info = cache_operation(final_worklogs_dict, current_servicedesk_cache_list, logger=logger)
 
         logger.info(f"Main: Cleaned, Combined, and Cached Dict Values: {json.dumps(cached_info,indent=4)}")
 

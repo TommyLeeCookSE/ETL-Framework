@@ -155,7 +155,7 @@ def main():
 
         cleaned_asset_details_dict, cleaned_sharepoint_details = reformat_dict(sharepoint_dict_items, cleaned_asset_details_dict, 'saas_id')
         cleaned_asset_details_dict = check_asset_status(cleaned_sharepoint_details, cleaned_asset_details_dict)
-        
+
         previous_servicedesk_cache_list[1] = cleaned_sharepoint_details
 
         current_data = cache_operation(cleaned_asset_details_dict,previous_servicedesk_cache_list,logger=logger)
@@ -178,8 +178,6 @@ def main():
 
         sharepoint_connector_o.batch_upload(batched_queue)
         logger.info("Main: Uploaded items to SharePoint.")
-
-        
 
         logger.info("Main: Updating Cache with SharePoint info")
         new_dates = {

@@ -31,6 +31,13 @@ def cache_operation(current_dict, previous_cache_l, delete: str=False, logger: o
         pass
     elif change_status == 'continue':
         current_cache_l = check_changes(previous_cache_l,current_cache_l, delete, logger)
+        logger.info(f"{json.dumps(current_cache_l,indent=4)}")
+        operations = current_cache_l[3].get('operations')
+        post_num = operations.get('post')
+        patch_num = operations.get('patch')
+        delete_num = operations.get('delete')
+        if all(status_count == 0 for status_count in (post_num, patch_num, delete_num)):
+            current_cache_l[2]['status'] = 'exit'
 
     return current_cache_l
 
