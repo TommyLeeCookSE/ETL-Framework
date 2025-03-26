@@ -213,6 +213,8 @@ def convert_to_dict(po_list:list) -> dict:
     """
     po_dict = {}
     for item in po_list:
+            for key in ['Purchase_Request_Id', 'RESOLUTION_NUMBER', 'VENDOR_ID', 'VENDOR_NUMBER']:
+                item.pop(key, None)
             key = item.get('Unique_ID')
             po_dict[key] = item
 

@@ -38,7 +38,7 @@ def main():
 
         cached_list = read_from_json(cache_file_path)
         cached_list[1] = formatted_cached_dict
-        cache_response = cache_operation(formatted_licenses_dict, cached_list)
+        cache_response = cache_operation(formatted_licenses_dict, cached_list, logger=logger)
 
         logger.info(json.dumps(cache_response,indent=4))
 
