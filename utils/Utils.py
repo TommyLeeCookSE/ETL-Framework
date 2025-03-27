@@ -18,8 +18,8 @@ def cache_operation(current_dict, previous_cache_l, delete: str=False, logger: o
     Returns:
         list : Either ['continue'] or [{operations}, {current_cache}]
     """
-    current_cache_l = generate_checksum(current_dict)
-    previous_cache_l = generate_checksum(previous_cache_l[1])
+    current_cache_l = generate_checksum(current_dict,logger)
+    previous_cache_l = generate_checksum(previous_cache_l[1],logger)
 
     # logger.info(f"Current Cache: {json.dumps(current_cache_l,indent=4)}")
     # logger.info(f"Previous Cache: {json.dumps(previous_cache_l,indent=4)}")
@@ -41,7 +41,7 @@ def cache_operation(current_dict, previous_cache_l, delete: str=False, logger: o
 
     return current_cache_l
 
-def generate_checksum(data: dict)-> Tuple[dict, str]:
+def generate_checksum(data: dict, logger:object=None)-> Tuple[dict, str]:
     """
     Takes in a dict of dicts, iterates through each item in the dict and creates a checksum for each item in the inner dict.
     The checksum of each dict will be added to a temp list to store all the checksum and generate a final checksum of the entire dict after sorting.

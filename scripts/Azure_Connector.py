@@ -2,6 +2,7 @@
 from utils.Connector import *
 import json, requests, time
 from collections import deque
+from azure.identity import DefaultAzureCredential
 
 class Azure_Connector(Connector):
     def __init__(self,logger):
@@ -178,3 +179,40 @@ class Azure_Connector(Connector):
         self.logger.info("Retrieved Azure License Info.")
 
         return all_license_dict
+    
+    def get_azure_arc_info(self) -> dict:
+        """
+        Queries Azure for Azure Arc Info and returns a dict of items.
+        """
+        self.logger.info("Getting Azure Arc Server Info...")
+        subscription_id = 'f7cbe00f-290f-488d-b244-223bc2188b3f'
+        api_version = '2020-08-02-preview'
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.HybridCompute/machines?api-version={api_version}"
+        credential = DefaultAzureCredential()
+        token = credential.get_token("https://management.azure.com/.default")
+        headers = {"Authorization": f"Bearer {token.token}"}
+        cot_machines = []
+
+        while url:
+            response = requests.get(url, headers=headers)
+
+            if response.status_code==200:
+                data = response.json()
+                cot_machines.extend(data)
+                self.logger.info(f"Added {len(data['value'])} users, total users: {len(cot_machines)}")
+                url = data.get('@odata.nextLink', None)
+            elif response.status_code == 401:
+                self.logger.warning("401 Unauthorized. Refreshing access token.")
+                self.access_token = self.get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {self.access_token}",
+                    "Content-Type": "application/json"
+                }
+            else:
+                self.logger.error(f"Failed to connect: {response.status_code}: {json.dumps(response.json(),indent=4)}")
+                break
+
+
+        self.logger.info("Retrieved Azure License Info.")
+
+        return cot_machines
