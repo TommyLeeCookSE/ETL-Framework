@@ -202,11 +202,11 @@ def main():
         final_worklogs_dict, sharepoint_cache = reformat_dict(sharepoint_cache, final_worklogs_dict, 'Unique_ID')
         current_servicedesk_cache_list[1] = sharepoint_cache
 
-        logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
-        logger.info(f"Main: Cleaned, Combined, and SharePoint Dict Values: {json.dumps(sharepoint_cache,indent=4)}")
+        # logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
+        # logger.info(f"Main: Cleaned, Combined, and SharePoint Dict Values: {json.dumps(sharepoint_cache,indent=4)}")
         cached_info = cache_operation(final_worklogs_dict, current_servicedesk_cache_list, logger=logger)
 
-        logger.info(f"Main: Cleaned, Combined, and Cached Dict Values: {json.dumps(cached_info,indent=4)}")
+        # logger.info(f"Main: Cleaned, Combined, and Cached Dict Values: {json.dumps(cached_info,indent=4)}")
 
         if cached_info[2].get('status') == 'exit':
             logger.info(f"No changes detected, exiting.")

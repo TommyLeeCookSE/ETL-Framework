@@ -133,7 +133,7 @@ def main():
             for value in current_asset_list_dict.values()
         }
         logger.info(f"Main: Retrieved {len(raw_asset_details_dict)} items.")
-        logger.info(f"Main: Raw details: {json.dumps(raw_asset_details_dict,indent=4)}")
+        # logger.info(f"Main: Raw details: {json.dumps(raw_asset_details_dict,indent=4)}")
         cleaned_asset_details_dict = clean_servicedesk_asset_details(raw_asset_details_dict)
         # logger.info(f"Main: Cleaned asset details:\n{json.dumps(cleaned_asset_details_dict,indent=4)}")
 
@@ -168,7 +168,7 @@ def main():
             for asset in current_data[1].values():
                 saas_id = asset.get('saas_id')
                 asset['Unique_ID'] = saas_id
-            logger.info(f"Main: Cache Details:\n{json.dumps(current_data,indent=4)}")
+            # logger.info(f"Main: Cache Details:\n{json.dumps(current_data,indent=4)}")
 
 
         logger.info("Main: Formatting and batching for upload.")
