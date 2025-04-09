@@ -120,7 +120,6 @@ def transform_data(po_dict: dict, logger: object) -> dict:
         calculate_balance(po_dict_item)
         check_expiry(po_dict_item)
         fix_department_names(po_dict_item)
-        fix_empty_dates(po_dict_item)
         unique_key_generator(po_dict_item)
     
     logger.info("Done transforming data.")
@@ -146,20 +145,15 @@ def check_expiry(po_dict:dict)-> None:
         po_dict (dict): Dict containg data for a PO item.
     """
     today = datetime.today().date()
-    expiration_str = po_dict.get('Expiration_Date', "2029-01-01 00:00:00") or "2029-01-01 00:00:00"
+    expiration_str = po_dict.get('Expiration_Date') or "2029-01-01 00:00:00"
     expiration_date = datetime.strptime(expiration_str, "%Y-%m-%d %H:%M:%S").date()
     po_dict['Expiration_Date'] = str(expiration_date)
 
-    days_till_expired = (expiration_date - today).days
-    statuses = {
-        'Expired': expiration_date < today,
-        'Less_Than_30_Days_Till_Expired': 0 <= days_till_expired <= 30,
-        'Less_Than_60_Days_Till_Expired': 31 <= days_till_expired <= 60,
-        'Less_Than_90_Days_Till_Expired': 61 <= days_till_expired <= 90
-    }
-    for key, condition in statuses.items():
-        po_dict[key] = 'X' if condition else 'N/A'
-        
+    days_till_expired = int((expiration_date - today).days)
+    po_dict['Days_Till_Expired'] = days_till_expired
+    
+    po_dict['Expired'] = 'X' if expiration_date < today else 'N/A'
+
 def fix_department_names(po_dict:dict) -> None:
     """
     Updates the department names to match what is used in Azure.
@@ -183,18 +177,6 @@ def fix_department_names(po_dict:dict) -> None:
     if department in department_names_dict:
         po_dict['Title'] = department_names_dict[department]
 
-def fix_empty_dates(po_dict:dict) -> None:
-    """
-    Sets dates that are by default, 1900-01-01 to empty so it doesn't interfere in the PowerBI report.
-    Args:
-        po_dict (dict): Dict containg data for a PO item.
-    """
-
-    if po_dict['Last_Month_Update_Date'] == "1900-01-01":
-        po_dict['Last_Month_Update_Date'] = ""
-    if po_dict['This_Month_Update_Date'] == "1900-01-01":
-        po_dict['This_Month_Update_Date'] = ""
-
 def unique_key_generator(po_dict:dict) -> None:
     """
     Generates an unique_key for each item based off the PO number and the Purchase_Request_Id
@@ -213,7 +195,9 @@ def convert_to_dict(po_list:list) -> dict:
     """
     po_dict = {}
     for item in po_list:
-            for key in ['Purchase_Request_Id', 'RESOLUTION_NUMBER', 'VENDOR_ID', 'VENDOR_NUMBER']:
+            for key in ['Purchase_Request_Id', 'RESOLUTION_NUMBER', 'VENDOR_ID', 'VENDOR_NUMBER', 'Contingency_Description',
+                        'Contingency_Amount', 'Contingency_Used', 'Contingency_Balance', 'Last_Month_Update_Date', 'Last_Month_Update', 'Last_Month_Updated_By', 
+                        'This_Month_Update_Date', 'This_Month_Update', 'This_Month_Updated_By']:
                 item.pop(key, None)
             key = item.get('Unique_ID')
             po_dict[key] = item

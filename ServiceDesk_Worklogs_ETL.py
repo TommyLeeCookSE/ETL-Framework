@@ -174,6 +174,7 @@ def main():
         servicedesk_connector_o = ServiceDesk_Connector(logger)
         
         module_list = ['requests','projects','problems','changes','releases']
+        # module_list = ['requests']
         worklogs_dict = {module_name : {} for module_name in module_list}
 
         for module_key in worklogs_dict:
@@ -192,7 +193,7 @@ def main():
             logger.info(f"Main: Completed cleaning data for {module_key}")
             final_worklogs_dict.update(cleaned_data)
         
-        
+        logger.info(json.dumps(final_worklogs_dict,indent=4))
         sharepoint_connector_o = SharePoint_Connector(logger)
         logger.info("Main: Getting SharePoint ids and updating cache.")
         sharepoint_cache = sharepoint_connector_o.get_item_ids('ServiceDesk_Worklogs')
@@ -202,11 +203,11 @@ def main():
         final_worklogs_dict, sharepoint_cache = reformat_dict(sharepoint_cache, final_worklogs_dict, 'Unique_ID')
         current_servicedesk_cache_list[1] = sharepoint_cache
 
-        # logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
-        # logger.info(f"Main: Cleaned, Combined, and SharePoint Dict Values: {json.dumps(sharepoint_cache,indent=4)}")
+        logger.info(f"Main: Cleaned, Combined, and Current Dict Values: {json.dumps(final_worklogs_dict,indent=4)}")
+        logger.info(f"Main: Cleaned, Combined, and SharePoint Dict Values: {json.dumps(sharepoint_cache,indent=4)}")
         cached_info = cache_operation(final_worklogs_dict, current_servicedesk_cache_list, logger=logger)
 
-        # logger.info(f"Main: Cleaned, Combined, and Cached Dict Values: {json.dumps(cached_info,indent=4)}")
+        logger.info(f"Main: Cleaned, Combined, and Cached Dict Values: {json.dumps(cached_info,indent=4)}")
 
         if cached_info[2].get('status') == 'exit':
             logger.info(f"No changes detected, exiting.")

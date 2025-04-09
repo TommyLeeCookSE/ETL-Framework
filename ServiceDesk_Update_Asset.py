@@ -40,7 +40,9 @@ def main():
         for item in formatted_deque:
             if (serial_number:= item.get('serial_number')):
                 logger.debug(f"Main: Serial Number: {serial_number}")
-                temp_asset_dict = servicedesk_connector_o.get_assets_from_servicedesk(serial_number=serial_number)
+                asset_type = item.get('asset_type')
+                logger.debug(f"Main: Asset Type: {asset_type}")
+                temp_asset_dict = servicedesk_connector_o.get_assets_from_servicedesk(serial_number=serial_number, asset_type = asset_type)
                 if temp_asset_dict:
                     asset = next(iter(temp_asset_dict.values()))
                     item['asset_id'] = asset['asset_id']
@@ -54,7 +56,7 @@ def main():
         upload_dict = {}
         for response_dict in response_list:
             sharepoint_id = response_dict.get('sharepoint_id')
-            status = response_dict.get('response_item',{}).get('status','fail')
+            status = response_dict.get('response_item',{}).get("response",{}).get('response_status',{}).get('status', "failed")
 
             upload_dict.update({
                 sharepoint_id: {

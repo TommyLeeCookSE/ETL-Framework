@@ -36,8 +36,8 @@ def cache_operation(current_dict, previous_cache_l, delete: str=False, logger: o
         post_num = operations.get('post')
         patch_num = operations.get('patch')
         delete_num = operations.get('delete')
-        if all(status_count == 0 for status_count in (post_num, patch_num, delete_num)):
-            current_cache_l[2]['status'] = 'exit'
+        # if all(status_count == 0 for status_count in (post_num, patch_num, delete_num)):
+        #     current_cache_l[2]['status'] = 'exit'
 
     return current_cache_l
 

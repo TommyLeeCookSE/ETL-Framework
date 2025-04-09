@@ -19,8 +19,8 @@ def main():
         logger.info(f"Initializing Azure Connector and retreiving Access Token.")
         azure_connector_o = Azure_Connector(logger)
         azure_arc_info = azure_connector_o.get_azure_arc_info()
-        for item in azure_arc_info:
-            logger.info(json.dumps(item,indent=4))
+
+        logger.info(json.dumps(azure_arc_info,indent=4))
         #GET AZURE SERVER INFO
 
 

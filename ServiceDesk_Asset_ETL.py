@@ -133,9 +133,9 @@ def main():
             for value in current_asset_list_dict.values()
         }
         logger.info(f"Main: Retrieved {len(raw_asset_details_dict)} items.")
-        # logger.info(f"Main: Raw details: {json.dumps(raw_asset_details_dict,indent=4)}")
+        logger.info(f"Main: Raw details: {json.dumps(raw_asset_details_dict,indent=4)}")
         cleaned_asset_details_dict = clean_servicedesk_asset_details(raw_asset_details_dict)
-        # logger.info(f"Main: Cleaned asset details:\n{json.dumps(cleaned_asset_details_dict,indent=4)}")
+        logger.info(f"Main: Cleaned asset details:\n{json.dumps(cleaned_asset_details_dict,indent=4)}")
 
         for item in cleaned_asset_details_dict.values():
             barcode = item.get('barcode')

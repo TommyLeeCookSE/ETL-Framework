@@ -2,7 +2,7 @@
 from utils.Connector import *
 import json, requests, time
 from collections import deque
-from azure.identity import DefaultAzureCredential
+from azure.identity import UsernamePasswordCredential
 
 class Azure_Connector(Connector):
     def __init__(self,logger):
@@ -186,20 +186,30 @@ class Azure_Connector(Connector):
         """
         self.logger.info("Getting Azure Arc Server Info...")
         subscription_id = 'f7cbe00f-290f-488d-b244-223bc2188b3f'
-        api_version = '2020-08-02-preview'
+        api_version = '2020-08-02'
         url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.HybridCompute/machines?api-version={api_version}"
-        credential = DefaultAzureCredential()
+        tenant_id = 'e7eb3e35-bde5-4eeb-a8ed-70d9a2d8c319'
+        client_id = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+        username = 'sharepoint@torranceca.gov'
+        password = 'wk! nWbX2Up%3'
+        credential = UsernamePasswordCredential(
+        client_id=client_id,
+        username=username,
+        password=password,
+        tenant_id=tenant_id
+    )
         token = credential.get_token("https://management.azure.com/.default")
         headers = {"Authorization": f"Bearer {token.token}"}
         cot_machines = []
+        final_machines = []
 
         while url:
             response = requests.get(url, headers=headers)
 
             if response.status_code==200:
                 data = response.json()
-                cot_machines.extend(data)
-                self.logger.info(f"Added {len(data['value'])} users, total users: {len(cot_machines)}")
+                cot_machines.extend(data['value'])
+                self.logger.info(f"Added {len(data['value'])} items, total items: {len(cot_machines)}")
                 url = data.get('@odata.nextLink', None)
             elif response.status_code == 401:
                 self.logger.warning("401 Unauthorized. Refreshing access token.")
@@ -215,4 +225,18 @@ class Azure_Connector(Connector):
 
         self.logger.info("Retrieved Azure License Info.")
 
-        return cot_machines
+        azure_arc_machine_info = {
+            item.get('id','') : item
+            for item in cot_machines
+        }
+        
+        for machine in azure_arc_machine_info:
+            full_id = machine
+            detail_url = f"https://management.azure.com{full_id}?api-version=2020-08-02"
+            detail_resp = requests.get(detail_url,headers=headers)
+
+            if detail_resp.status_code == 200:
+                full_machine = detail_resp.json()
+                final_machines.append(full_machine)
+        return final_machines
+        

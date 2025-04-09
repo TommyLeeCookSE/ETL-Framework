@@ -87,6 +87,7 @@ class ServiceDesk_Connector(Connector):
                 input_dict = {
                     'serial_number': item.get('Serial_Number',''),
                     'asset_id': None,
+                    'asset_type': item.get('Asset_Type'),
                     'input_data': input_data,
                     'sharepoint_id': key,
                     }
@@ -129,8 +130,11 @@ class ServiceDesk_Connector(Connector):
             input_data = upload_item.get('input_data')
             asset_id = upload_item.get('asset_id')
             sharepoint_id = upload_item.get('sharepoint_id')
-            
-            api_url = f'{self.base_url}/api/v3/assets/{asset_id}'
+            asset_type = upload_item.get('asset_type')
+            if asset_type == "Monnitor":
+                api_url = f'{self.base_url}/api/v3/assets/{asset_id}'
+            else:
+                api_url = f'{self.base_url}/api/v3/custom_asset_monitor/{asset_id}'
 
             info_dict = {
                 "url" : api_url,
@@ -148,7 +152,7 @@ class ServiceDesk_Connector(Connector):
 
         return response_list
     
-    def get_assets_from_servicedesk(self, asset_id: int = None, serial_number:str = None, last_updated:int = None) -> dict:
+    def get_assets_from_servicedesk(self, asset_id: int = None, serial_number:str = None, last_updated:int = None, asset_type=None) -> dict:
         """
         Gets assets from servicedesk. If asset_id is specified, pulls only that asset_id. If last_updated is specified, pulls all items since that date. If nothing is specified, pulls everything.
         Checks if the asset_id is in the cache first, if not, pulls the asset list 100 items at a time, checking each item's serial number, when found, stops.
@@ -168,9 +172,14 @@ class ServiceDesk_Connector(Connector):
         if asset_id or last_updated or serial_number:
             #if serial_number true, check cache to see if it's in the cache, if so and has the asset_id, return the asset_id
             #If not, get the asset_id by calling the list of assets 100 at a time, checking each item by calling it by its asset_id till it finds the serial_number
-            if serial_number:
+            if serial_number and not asset_type:
                 self.logger.info(f"Get_Assets_Servicedesk: Getting asset_id by Serial Number: {serial_number}")
                 has_more_rows, asset_dict = self.get_list_of_assets(page, fields_required=['name'], search_criteria={"field": "name", "condition": "eq", "value": f'{serial_number}.cot.torrnet.com'})
+                self.logger.debug(f"Get_Assets: Asset_Dict: {asset_dict}")
+            
+            elif serial_number and asset_type:
+                self.logger.info(f"Get_Assets_Servicedesk: Getting {asset_type} asset_id by Serial Number: {serial_number}")
+                has_more_rows, asset_dict = self.get_list_of_assets(page, fields_required=None, search_criteria={"field": "name", "condition": "eq", "value": serial_number}, asset_type=asset_type)
                 self.logger.debug(f"Get_Assets: Asset_Dict: {asset_dict}")
 
             elif asset_id:
@@ -200,7 +209,7 @@ class ServiceDesk_Connector(Connector):
         self.logger.info(f"Get_Assets: Done retrieving items")
         return asset_dict
     
-    def get_list_of_assets(self, page_number:int, fields_required:list = None, search_criteria:dict = None) -> tuple:
+    def get_list_of_assets(self, page_number:int, fields_required:list = None, search_criteria:dict = None, asset_type = None) -> tuple:
         """
         Takes in a page number and gets a list of 100 assets, returns the assets as a list.
 
@@ -214,8 +223,10 @@ class ServiceDesk_Connector(Connector):
         asset_dict = {}
 
         self.logger.info(f"Get_List_Assets: Getting list of assets for page: {page_number}")
-
-        api_url = f'{self.base_url}/api/v3/assets'
+        if asset_type == "Monitor":
+            api_url = f'{self.base_url}/api/v3/custom_asset_monitor'
+        else:
+            api_url = f'{self.base_url}/api/v3/assets'
         self.logger.debug(f"Get_List_Assets: Calling {api_url}")
         
         params = {
@@ -240,6 +251,7 @@ class ServiceDesk_Connector(Connector):
         }
 
         response_dict = self.send_response(info_dict)
+        self.logger.debug(json.dumps(response_dict,indent=4))
         if (list_info := response_dict.get('response',{}).get('list_info')):
             # self.logger.info(f"Get_List_Assets: List info: {json.dumps(list_info,indent=4)}")
             has_more_rows = list_info.get('has_more_rows',False)
@@ -247,7 +259,7 @@ class ServiceDesk_Connector(Connector):
             self.logger.error(f"Get_List_Assets: No List Info Detected!")
             has_more_rows = False
 
-        if (asset_list:= response_dict.get('response',{}).get('assets')):
+        if (asset_list:= response_dict.get('response',{}).get('assets')) or (asset_list:= response_dict.get('response',{}).get('custom_asset_monitor')):
             # self.logger.info(f"Asset_List: {json.dumps(asset_list,indent=4)}")
             asset_dict = {
                 item.get('name'): {
