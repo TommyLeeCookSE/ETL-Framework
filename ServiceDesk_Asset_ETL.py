@@ -119,6 +119,13 @@ def main():
         checksum, items, dates, previous_servicedesk_cache_list = read_servicedesk_cache(servicedesk_cache_file_path)
         logger.info(f"Main: Retrieved cached items:\nChecksum: {checksum}\nDates:{dates}")
         last_updated_iso = dates['current_time_epoch_ms']
+        iteration_type = dates['iteration'] % dates['full_iteration_num']
+        if iteration_type == 0:
+            delete_bool = True
+            last_updated_iso = 0
+        else:
+            delete_bool = False
+        
 
         logger.info(f"Main: Retrieving assets from ServiceDesk.")
         servicedesk_connector_o = ServiceDesk_Connector(logger)
@@ -158,7 +165,7 @@ def main():
 
         previous_servicedesk_cache_list[1] = cleaned_sharepoint_details
 
-        current_data = cache_operation(cleaned_asset_details_dict,previous_servicedesk_cache_list,logger=logger)
+        current_data = cache_operation(cleaned_asset_details_dict,previous_servicedesk_cache_list,logger=logger, delete=delete_bool)
         status = current_data[2].get('status')
         if status == 'exit':
             logger.info("Main: No changes detected, returning.")
@@ -180,9 +187,13 @@ def main():
         logger.info("Main: Uploaded items to SharePoint.")
 
         logger.info("Main: Updating Cache with SharePoint info")
+        current_iteration = dates.get('iteration',0)
+        current_iteration += 1
         new_dates = {
             'current_time_epoch_ms' : int(time.time()*1000),
-            'date_last_checked_str' : datetime.now().strftime(("%m/%d/%Y %H:%M"))
+            'date_last_checked_str' : datetime.now().strftime(("%m/%d/%Y %H:%M")),
+            'iteration' : current_iteration,
+            'full_iteration_num': 15
         }
         current_data.append(new_dates)
         write_to_json(current_data,servicedesk_cache_file_path)

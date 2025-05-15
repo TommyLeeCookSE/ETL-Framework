@@ -26,9 +26,13 @@ class ServiceDesk_Connector(Connector):
             formatted_item (str): Formatted f-string of the change_item.
         """
         if module_name == 'asset_upload':
+            asset_type = change_item.get('Asset_Type')
+            serial_number_key = "serial_number" if asset_type != "Monitor" else "name"
+            asset_key = "asset" if asset_type != "Monitor" else "custom_asset_monitor"
+
             asset_data = {
-                "asset": {
-                    "serial_number": change_item.get("Serial_Number", ""),
+                asset_key: {
+                    serial_number_key: change_item.get("Serial_Number", ""),
                     "barcode": int(change_item.get("Barcode", "0")) if change_item.get("Barcode") else "",
                     "udf_fields": {
                         "udf_char8": int(change_item.get("Request_Number", "0")) if change_item.get("Request_Number") else "",
@@ -46,7 +50,7 @@ class ServiceDesk_Connector(Connector):
             user_type = change_item.get('User_Type',"")
 
             if user_type == 'User':
-                asset_data['asset']['user'] = {
+                asset_data[asset_key]['user'] = {
                     'name': change_item.get('User_Name',''),
                     'email_id': change_item.get('User','')
                 }
@@ -131,7 +135,7 @@ class ServiceDesk_Connector(Connector):
             asset_id = upload_item.get('asset_id')
             sharepoint_id = upload_item.get('sharepoint_id')
             asset_type = upload_item.get('asset_type')
-            if asset_type == "Monnitor":
+            if asset_type != "Monitor":
                 api_url = f'{self.base_url}/api/v3/assets/{asset_id}'
             else:
                 api_url = f'{self.base_url}/api/v3/custom_asset_monitor/{asset_id}'
@@ -174,12 +178,13 @@ class ServiceDesk_Connector(Connector):
             #If not, get the asset_id by calling the list of assets 100 at a time, checking each item by calling it by its asset_id till it finds the serial_number
             if serial_number and not asset_type:
                 self.logger.info(f"Get_Assets_Servicedesk: Getting asset_id by Serial Number: {serial_number}")
-                has_more_rows, asset_dict = self.get_list_of_assets(page, fields_required=['name'], search_criteria={"field": "name", "condition": "eq", "value": f'{serial_number}.cot.torrnet.com'})
+                has_more_rows, asset_dict = self.get_list_of_assets(page, fields_required=None, search_criteria={"field": "name", "condition": "eq", "value": f'{serial_number}.cot.torrnet.com'})
                 self.logger.debug(f"Get_Assets: Asset_Dict: {asset_dict}")
             
             elif serial_number and asset_type:
                 self.logger.info(f"Get_Assets_Servicedesk: Getting {asset_type} asset_id by Serial Number: {serial_number}")
-                has_more_rows, asset_dict = self.get_list_of_assets(page, fields_required=None, search_criteria={"field": "name", "condition": "eq", "value": serial_number}, asset_type=asset_type)
+                field_key = "serial_number" if asset_type != "Monitor" else "name"
+                has_more_rows, asset_dict = self.get_list_of_assets(page, fields_required=None, search_criteria={"field": field_key, "condition": "eq", "value": serial_number}, asset_type=asset_type)
                 self.logger.debug(f"Get_Assets: Asset_Dict: {asset_dict}")
 
             elif asset_id:
@@ -225,6 +230,7 @@ class ServiceDesk_Connector(Connector):
         self.logger.info(f"Get_List_Assets: Getting list of assets for page: {page_number}")
         if asset_type == "Monitor":
             api_url = f'{self.base_url}/api/v3/custom_asset_monitor'
+            fields_required = ['name','barcode','user', 'department', 'state', 'udf_fields']
         else:
             api_url = f'{self.base_url}/api/v3/assets'
         self.logger.debug(f"Get_List_Assets: Calling {api_url}")
@@ -322,8 +328,8 @@ class ServiceDesk_Connector(Connector):
                 "list_info":{
                     "page": page_number, 
                     "row_count": self.max_row_count,
-                    "sort_field": "id",
-                    "sort_order": "asc",
+                    "sort_field": "created_time",
+                    "sort_order": "desc",
                     **({"search_criteria": (search_criteria := search_criteria)} if search_criteria else {}),
                     **({"fields_required": (fields_required := fields_required)} if fields_required else {})
                 }

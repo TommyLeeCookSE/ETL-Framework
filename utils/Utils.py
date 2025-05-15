@@ -233,18 +233,18 @@ def trim_sharepoint_keys(sharepoint_dict: dict)-> dict:
         'Edit', 'ItemChildCount', 'FolderChildCount', '_ComplianceFlags', '_ComplianceTag', '_ComplianceTagWrittenTime',
         '_ComplianceTagUserId', 'AppAuthorLookupId', 'AppEditorLookupId', 'ContentType', 'Modified', 'LinkTitle', 'LinkTitleNoMenu'
     }
-    
-    for item in sharepoint_dict.values():
-        unique_id = item.get('id')
-        trimmed_item = item.copy()
-        trimmed_item['sharepoint_id'] = unique_id
+    if sharepoint_dict:
+        for item in sharepoint_dict.values():
+            unique_id = item.get('id')
+            trimmed_item = item.copy()
+            trimmed_item['sharepoint_id'] = unique_id
+            
+            for unwanted_key in trimmed_set:
+                if unwanted_key in trimmed_item:
+                    del trimmed_item[unwanted_key]
+            
+            trimmed_dict[unique_id] = trimmed_item
         
-        for unwanted_key in trimmed_set:
-            if unwanted_key in trimmed_item:
-                del trimmed_item[unwanted_key]
-        
-        trimmed_dict[unique_id] = trimmed_item
-    
     return trimmed_dict
 
 def reassign_key(sharepoint_dict: dict, key_name:str)-> dict:

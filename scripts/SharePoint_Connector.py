@@ -145,7 +145,7 @@ class SharePoint_Connector(Connector):
                 if item_id_response['status'] == 'success':
                     self.logger.info(f"Get Item IDs: Succeeded.")
                     list_info = item_id_response['response']
-                    for item in list_info['value']:
+                    for item in list_info.get('value',{}):
                         if (fields:= item.get('fields')):
                             sharepoint_id = item.get('id')
                             sharepoint_list_items[sharepoint_id] = fields
@@ -262,7 +262,6 @@ class SharePoint_Connector(Connector):
                     "Expiration_Date": "Expiration_Date",
                     "Expired": "Expired",
                     'Days_Till_Expired' : "Days_Till_Expired",
-                    "Less_Than_25_Remaining": "Less_Than_25_Remaining",
                     "Unique_ID": "Unique_ID",
                 },
                 'unique_id_field': 'Unique_ID',
@@ -351,6 +350,32 @@ class SharePoint_Connector(Connector):
                     'total_licenses': 'total_licenses',
                     'consumed_licenses': 'consumed_licenses',
                     'remaining_licenses': 'remaining_licenses'
+                },
+                'unique_id_field': 'Unique_ID',
+            },
+            'TFD_Credential_List' : {
+                'fields': {
+                    'unique_id': 'Unique_ID',
+                    'credentialid': 'credentialid',
+                    'userid': 'userid',
+                    'credentialname': 'credentialname',
+                    'startdate': 'startdate',
+                    'expirationdate': 'expirationdate',
+                    'status': 'status',
+                },
+                'unique_id_field': 'Unique_ID',
+            },
+            'TFD_User_List' : {
+                'fields': {
+                    'userid': 'userid',
+                    'status': 'status',
+                    'full_name': 'full_name',
+                    'email': 'username',
+                    'shift': 'shift',
+                    'rank': 'rank',
+                    'unit': 'unit',
+                    'station': 'station',
+                    'supervisor' : 'supervisor',
                 },
                 'unique_id_field': 'Unique_ID',
             }

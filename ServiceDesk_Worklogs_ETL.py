@@ -192,8 +192,8 @@ def main():
             cleaned_data = trim_keys(cleaned_data)
             logger.info(f"Main: Completed cleaning data for {module_key}")
             final_worklogs_dict.update(cleaned_data)
-        
-        logger.info(json.dumps(final_worklogs_dict,indent=4))
+        # logger.info(json.dumps(final_worklogs_dict,indent=4))
+
         sharepoint_connector_o = SharePoint_Connector(logger)
         logger.info("Main: Getting SharePoint ids and updating cache.")
         sharepoint_cache = sharepoint_connector_o.get_item_ids('ServiceDesk_Worklogs')
@@ -212,6 +212,8 @@ def main():
         if cached_info[2].get('status') == 'exit':
             logger.info(f"No changes detected, exiting.")
             return
+
+        logger.info(f"Changes detected, uploading.")
         
         
         batch_queue = deque()

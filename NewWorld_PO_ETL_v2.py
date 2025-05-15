@@ -26,10 +26,13 @@ def extract_po_information(logger)-> list:
         )
         po_info = []
         cursor = conn.cursor()
-        stored_procedure_name = "dbo.COTSP_PO_ALERT_WITH_CONTINGENCY_INFO_TOMMY"
 
         try:
-            logger.info(f"Extracting informating from: {stored_procedure_name}")
+            logger.info(f"Extracting informating from: LOGOSDB")
+            query = """
+                SELECT
+                
+            """
             cursor.execute(f"EXEC {stored_procedure_name}")
             result_set_counter = 0
             while True:
@@ -165,7 +168,7 @@ def fix_department_names(po_dict:dict) -> None:
         "Attorney": "City Attorney",
         "City Mgr": "City Manager",
         "CommunDvl": "Community Development",
-        "CommunServ": "Community Services",
+        "CommunServ": "Community Service",
         "FINANCE": "Finance",
         "GenService": "General Services",
         "HR" : "Human Resources",
