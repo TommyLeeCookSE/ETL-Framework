@@ -317,6 +317,24 @@ def assign_credential_names(credentials: dict, credential_dict:dict) -> dict:
     
     return {}
 
+def calculate_days_till_expired(credentials:dict)-> dict:
+    """
+    Takes in a dict of credentials, iterates over it and calculates the days till expired.
+    Returns the dict with days_till_expired added.
+    
+    Args:
+        credentials (dict)
+    Returns:
+        credentials (dict): Same dict with calculates days_till_expired added.
+    """
+
+    for credential in credentials.values():
+        expiration_date = datetime.strptime(credential.get('expirationdate'), "%m/%d/%Y")
+        today = datetime.today()
+
+        credential['days_till_expired'] = float((expiration_date - today).days)
+
+    return credentials
 def get_links(user_dict:dict, credential_dict:dict) -> dict:
     """
     Iterates over the links_dict in the user_dict. Retrieves the groups and credentials and saves it to the user.
@@ -341,14 +359,14 @@ def get_links(user_dict:dict, credential_dict:dict) -> dict:
         groups_to_extract = {"shift": '12366', "rank": "11224", "unit": "24618", "station": "38108"}
         for key, group_value in groups_to_extract.items():
             user[key] = user['groups'].get(group_value,{}).get(key,'').strip()
-            
-        user['credentials'] = get_users_credentials(credential_link)
-        user['credentials'] = clean_user_credentials(user['credentials'])
-        user['credentials'] = assign_credential_names(user['credentials'], credential_dict)
+        
+        credentials = get_users_credentials(credential_link)
+        credentials = clean_user_credentials(credentials)
+        credentials = assign_credential_names(credentials, credential_dict)
+        user['credentials'] = calculate_days_till_expired(credentials)
 
         del user['links']
         del user['groups']
-
     return user_dict
 
 def remove_non_essential(user_dict:dict)-> dict:
@@ -372,7 +390,7 @@ def remove_non_essential(user_dict:dict)-> dict:
         del user_dict[id]
 
     return user_dict
-    
+
 def create_station_hierarchy(user_dict:dict)-> dict:
     """
     Takes in user_dict and creates a station hierarchy from the users list.
@@ -506,7 +524,7 @@ def split_into_sharepoint_lists(user_dict:dict)->dict:
         'cred_dict':{},
         'user_dict':{}
     }
-    cred_dict_key_list = ['unique_id', 'credentialid', 'userid', 'credentialname', 'startdate', 'expirationdate', 'status']
+    cred_dict_key_list = ['unique_id', 'credentialid', 'userid', 'credentialname', 'startdate', 'expirationdate', 'status', 'days_till_expired']
     user_dict_key_list = ['userid', 'status', 'full_name', 'username', 'shift', 'rank', 'unit', 'station', 'supervisor']
     
     for userid, user in user_dict.items():

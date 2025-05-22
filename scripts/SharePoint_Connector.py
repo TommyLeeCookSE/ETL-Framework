@@ -365,6 +365,7 @@ class SharePoint_Connector(Connector):
                     'credentialname': 'credentialname',
                     'startdate': 'startdate',
                     'expirationdate': 'expirationdate',
+                    'days_till_expired': 'days_till_expired',
                     'status': 'status',
                 },
                 'unique_id_field': 'Unique_ID',
