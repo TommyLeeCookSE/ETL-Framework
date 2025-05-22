@@ -188,7 +188,10 @@ class SharePoint_Connector(Connector):
 
             self.logger.debug(f"Response: {json.dumps(response_json,indent=4)}")
             status_codes = []
-            status_codes = [status_codes.append(int(item['status'])) for item in response_json['responses'] if 'status' in item]
+            try:
+                status_codes = [status_codes.append(int(item['status'])) for item in response_json['responses'] if 'status' in item]
+            except Exception as e:
+                self.logger.error(f"Error getting status codes for response, error: {e}")
 
             retry_after = []
             for status in status_codes:
@@ -357,6 +360,7 @@ class SharePoint_Connector(Connector):
                 'fields': {
                     'unique_id': 'Unique_ID',
                     'credentialid': 'credentialid',
+                    'categoryid': 'categoryid',
                     'userid': 'userid',
                     'credentialname': 'credentialname',
                     'startdate': 'startdate',
@@ -376,6 +380,13 @@ class SharePoint_Connector(Connector):
                     'unit': 'unit',
                     'station': 'station',
                     'supervisor' : 'supervisor',
+                },
+                'unique_id_field': 'Unique_ID',
+            },
+            'TFD_Credential_Categories' : {
+                'fields': {
+                    'categoryid': 'categoryid',
+                    'categoryname': 'categoryname'
                 },
                 'unique_id_field': 'Unique_ID',
             }

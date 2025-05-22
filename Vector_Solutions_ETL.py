@@ -1,4 +1,5 @@
 import os, sys, requests, json
+from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 project_root = os.path.dirname(os.path.abspath(__file__))
 os.chdir(project_root)
@@ -10,6 +11,7 @@ script_name = Path(__file__).stem
 logger = setup_logger(script_name)
 tokens_file_path = r"misc\tokens.json"
 cred_cache_file_path = r"cache\cred_vector_solutions_cache.json"
+categories_cache_file_path = r"cache\categories_cache.json"
 user_cache_file_path = r"cache\user_vector_solutions_cache.json"
 all_tokens = read_from_json(tokens_file_path)
 vector_token = all_tokens['vector_solutions_tokens']
@@ -133,6 +135,52 @@ def get_users_credentials(link:str) -> dict:
     
     return ''
 
+def get_categories() -> dict:
+    """
+    """
+    logger.info(f"Get All Credential Categories.")
+    url = f'http://devsandbox.targetsolutions.com/v1/credentials'
+    response = requests.get(url, headers=headers)
+    if response.ok:
+        logger.info(f"Get All Users: Response [{response.status_code}] valid.")
+        data = response.json()
+        return data
+    
+    return None
+
+def clean_categories(credentials:dict) ->dict:
+    """
+    """
+    cleaned_credential_category={}
+    keys_to_extract = ['categoryid','categoryname','credentialid']
+    for credential in credentials.get('credentials'):
+        if all(key in credential for key in keys_to_extract):
+            credentialid = float(credential.get('credentialid'))
+            cleaned_credential_category[credentialid] = {
+                key : float(credential[key]) if isinstance(credential[key], int) else credential[key]
+                for key in keys_to_extract
+                }
+    
+    return cleaned_credential_category
+
+def add_categoryid(credential_dict:dict, categories_dict:dict)->dict:
+    """
+    Iterates over the credential dict, comparing credentialid to the credentialids in categories dict. If founds, assigns the categoryid to it.
+    """
+    for credential in credential_dict.values():
+        credentialid = credential.get('credentialid')
+        if credentialid in categories_dict:
+            logger.info(f"{credentialid}")
+            credential['categoryid'] = categories_dict[credentialid].get('categoryid')
+
+    return credential_dict
+
+def make_cateogoryid_unique(categories_dict:dict)->dict:
+    """
+    Makes the category dict unique by creating a dict with categoryid as the unique key,
+    """
+    return {category.get('categoryid'): {'categoryname': category.get('categoryname'), 'categoryid': category.get('categoryid')} for category in categories_dict.values()}
+
 def clean_users_groups(groups:list)-> dict:
     """
     Takes in group list and cleans the list and converrts it to a dict of dicts instead of a list of dicts.
@@ -161,18 +209,32 @@ def clean_users_groups(groups:list)-> dict:
 
 def check_credential_expiration(credential: dict)-> bool:
     """
-    If the expirationdate is empty, return True which will mark it for deletion.
+    If the expirationdate is empty, return false which will mark it for deletion.
     Args:
         credential (dict): Dict with credential information.
+        {
+            "notes": "",
+            "status": "active",
+            "startdate": "01/01/2021",
+            "credentialid": 345506,
+            "credentialnumber": "",
+            "link": "http://devsandbox.targetsolutions.com/v1/credentials/345506/assignments/345506-1862279",
+            "expirationdate": "12/31/2021",
+            "attachmentcount": 0,
+            "siteid": 18380
+        }
     Returns:
-        bool: True it exists, false means delete
+        bool: True it exists and is within last 12 months, false means delete
     """
 
     expiration_date = credential.get('expirationdate')
-    if expiration_date:
-        return True
-    else:
+    if not expiration_date:
         return False
+
+    exp_date = datetime.strptime(credential.get('expirationdate'), "%m/%d/%Y")
+    twelve_months_ago = datetime.today() - timedelta(365)
+
+    return exp_date >= twelve_months_ago
 
 def clean_user_credentials(credentials:list)-> dict:
     """
@@ -187,10 +249,9 @@ def clean_user_credentials(credentials:list)-> dict:
     cleaned_credential_dict = {}
     if credentials:
         for credential in credentials:
-            is_expiration_date = check_credential_expiration(credential)
-            if not is_expiration_date:
+            valid_credential = check_credential_expiration(credential)
+            if not valid_credential:
                 continue
-
             credential_id = credential.get('credentialid')
             cleaned_credential_dict[credential_id] = {}
 
@@ -269,6 +330,7 @@ def get_links(user_dict:dict, credential_dict:dict) -> dict:
     """
     len_users = len(user_dict)
     for index, user in enumerate(user_dict.values(),1):
+
         logger.info(f"Getting Links: {index}/{len_users} users.")
         links = user.get('links')
         group_link = links.get('groups')
@@ -276,12 +338,10 @@ def get_links(user_dict:dict, credential_dict:dict) -> dict:
 
         user['groups'] = get_users_groups(group_link)
         user['groups'] = clean_users_groups(user['groups'])
-        user['shift'] = user['groups'].get('12366',{}).get('shift','').strip()
-        user['rank'] = user['groups'].get('11224',{}).get('rank')
-        user['unit'] = user['groups'].get('24618',{}).get('unit')
-        user['station'] = user['groups'].get('38108',{}).get('station')
+        groups_to_extract = {"shift": '12366', "rank": "11224", "unit": "24618", "station": "38108"}
+        for key, group_value in groups_to_extract.items():
+            user[key] = user['groups'].get(group_value,{}).get(key,'').strip()
             
-
         user['credentials'] = get_users_credentials(credential_link)
         user['credentials'] = clean_user_credentials(user['credentials'])
         user['credentials'] = assign_credential_names(user['credentials'], credential_dict)
@@ -485,36 +545,48 @@ def split_into_sharepoint_lists(user_dict:dict)->dict:
 
     return sharepoint_upload_dict
 
-
 def main():
     logger.info(f"Begin extraction and transformation operations.")
+
+    categories_dict = clean_categories(get_categories())
+
     users = get_all_users()
     users_dict = filter_active_users(users)
+
     credential_list = get_credentials_list()
     credential_dict = map_credentials(credential_list)
+
     users_dict = get_links(users_dict, credential_dict)
     users_dict = remove_non_essential(users_dict)
+
     hierarchy = create_station_hierarchy(users_dict)
     users_dict = assign_supervisor(users_dict, hierarchy)
+
     sharepoint_upload_dict = split_into_sharepoint_lists(users_dict)
+    sharepoint_upload_dict['cred_dict'] = add_categoryid(sharepoint_upload_dict['cred_dict'], categories_dict)
+    sharepoint_upload_dict['cat_dict'] = make_cateogoryid_unique(categories_dict)
     logger.info(f"Completed extraction and transformation.")
 
     sharepoint_connector_o = SharePoint_Connector(logger)
-    for filepath in [cred_cache_file_path, user_cache_file_path]:
+    for filepath in [cred_cache_file_path, user_cache_file_path, categories_cache_file_path]:
         logger.info(f"Begin caching operations.")
         if 'cred' in filepath:
             unique_id = 'unique_id'
             current_dict = sharepoint_upload_dict['cred_dict']
             sp_list_name = 'TFD_Credential_List'
-        else:
+        elif 'user' in filepath:
             unique_id = 'userid'
             current_dict = sharepoint_upload_dict['user_dict']
             sp_list_name = 'TFD_User_List'
+        elif 'categories' in filepath:
+            unique_id = 'categoryid'
+            current_dict = sharepoint_upload_dict['cat_dict']
+            sp_list_name = 'TFD_Credential_Categories'
 
         cached_sharepoint_items = sharepoint_connector_o.get_item_ids(sp_list_name)
         current_formatted_dict, formatted_sharepoint_dict = reformat_dict(cached_sharepoint_items, current_dict, unique_id)
-        # logger.debug(f"Cached {sp_list_name} Sharepoint: {json.dumps(formatted_sharepoint_dict,indent=4)}")
-        # logger.debug(f"Current {sp_list_name} Dict: {json.dumps(current_formatted_dict,indent=4)}")
+        logger.debug(f"Cached {sp_list_name} Sharepoint: {json.dumps(formatted_sharepoint_dict,indent=4)}")
+        logger.debug(f"Current {sp_list_name} Dict: {json.dumps(current_formatted_dict,indent=4)}")
         previous_cache = read_from_json(filepath)
         previous_cache[1] = formatted_sharepoint_dict
 
@@ -540,9 +612,7 @@ def main():
         
         logger.info(f"ETL Completed successfully: Exit Code 0")
 
-    
-    
-
 
 if __name__ == "__main__":
     main()
+    # test_main()
