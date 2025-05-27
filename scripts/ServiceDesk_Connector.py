@@ -25,6 +25,7 @@ class ServiceDesk_Connector(Connector):
         Returns:
             formatted_item (str): Formatted f-string of the change_item.
         """
+        self.logger.info(f"Change Dict: {json.dumps(change_item, indent=4)}")
         if module_name == 'asset_upload':
             asset_type = change_item.get('Asset_Type')
             serial_number_key = "serial_number" if asset_type != "Monitor" else "name"
@@ -46,6 +47,7 @@ class ServiceDesk_Connector(Connector):
                     }
                 }
             }
+            self.logger.info(f"Asset Data: {json.dumps(asset_data, indent=4)}")
 
             user_type = change_item.get('User_Type',"")
 
@@ -55,7 +57,7 @@ class ServiceDesk_Connector(Connector):
                     'email_id': change_item.get('User','')
                 }
             elif user_type == 'Shared Device':
-                asset_data['asset']['location'] = change_item.get('User_Location')
+                asset_data[asset_key]['location'] = change_item.get('User_Location')
 
         elif module_name == 'repl_fund':
             asset_data = {

@@ -335,6 +335,7 @@ def calculate_days_till_expired(credentials:dict)-> dict:
         credential['days_till_expired'] = float((expiration_date - today).days)
 
     return credentials
+
 def get_links(user_dict:dict, credential_dict:dict) -> dict:
     """
     Iterates over the links_dict in the user_dict. Retrieves the groups and credentials and saves it to the user.
